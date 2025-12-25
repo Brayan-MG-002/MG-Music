@@ -6,8 +6,8 @@ All rights reserved.
 This repository contains the visible source code of the application
 "MG Music", developed entirely by Brayan Medrano.
 
-Permission is granted to view and read the source code for transparency,
-learning, and informational purposes ONLY.
+Permission is granted to view and read the source code for transparency
+and informational purposes ONLY.
 
 The following actions are STRICTLY PROHIBITED without explicit written
 permission from the author:
@@ -25,6 +25,10 @@ MG Music is a fan-made project inspired by the artist Ado.
 This project is not affiliated with, endorsed by, or officially connected
 to Ado, her management, or any related entity.
 
+The application does not require monetization to function.
+Any optional support or donation features are voluntary and not required
+to access or use the app.
+
 All trademarks, artist names, and references belong to their respective owners.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
@@ -40,7 +44,7 @@ Este repositorio contiene el código fuente visible de la aplicación
 "MG Music", desarrollada completamente por Brayan Medrano.
 
 Se permite únicamente la visualización y lectura del código con fines de
-transparencia, aprendizaje e información.
+transparencia e información.
 
 Queda ESTRICTAMENTE PROHIBIDO sin autorización escrita del autor:
 
@@ -55,6 +59,9 @@ Este proyecto NO es de código abierto.
 
 MG Music es un proyecto hecho por un fan e inspirado en la artista Ado.
 No está afiliado, respaldado ni relacionado oficialmente con Ado ni su equipo.
+
+La aplicación no requiere monetización para funcionar.
+Cualquier opción de apoyo o donación es voluntaria y no obligatoria para su uso.
 
 Las marcas, nombres y referencias pertenecen a sus respectivos propietarios.
 

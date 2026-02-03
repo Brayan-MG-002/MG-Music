@@ -83,9 +83,6 @@ It is a personal project made with respect, care, and genuine passion.
 MG Music existe gracias al profundo amor y admiración que siento por Ado.
 Esta aplicación nació del deseo de escuchar su música en un reproductor
 pensado especialmente para sus canciones, su ambiente y lo que su música
-me hace sentir.
-<<<<<<< HEAD
+me hace sentir.k
 Es un proyecto personal hecho con respeto, cuidado y pasión genuina.
-=======
 Es un proyecto personal hecho con respeto, cuidado y pasión genuina.
->>>>>>> cf668aef610e4c0e323e03c1b50c4d674ac83e1b

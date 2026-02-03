@@ -1,0 +1,63 @@
+# Nombre del paquete.
+name: mg_music
+# Descripción del proyecto.
+description: "Un Reproductor Creado y pensado para Ado"
+# Evita que el paquete se publique accidentalmente en pub.dev.
+publish_to: 'none'
+# Versión de la aplicación.
+version: 1.0.0+1
+
+# Entorno de desarrollo y versión de SDK de Dart.
+environment:
+  sdk: ^3.10.1
+
+# Dependencias de producción de la aplicación.
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  collection: ^1.17.0
+  device_info_plus: ^12.3.0
+  animations: ^2.0.11
+  flutter_staggered_animations: ^1.1.1
+  animations_plus: ^1.0.1
+  permission_handler: ^11.3.1
+  ionicons: ^0.2.2
+  shared_preferences: ^2.3.3
+  image_picker: ^1.1.2
+  provider: ^6.1.2
+  intl: ^0.20.1
+  path_provider: ^2.1.3
+  audiotags: ^1.4.5
+  file_picker: ^8.0.6
+  on_audio_query: ^2.9.0
+  just_audio: ^0.9.36
+  palette_generator: ^0.3.3+7
+  just_audio_background: ^0.0.1-beta.17
+  audio_service: ^0.18.0
+  audio_session: ^0.1.6
+  url_launcher: ^6.3.2
+  http: ^1.1.0
+  package_info_plus: ^8.0.0
+  connectivity_plus: ^5.0.0
+
+# Dependencias de desarrollo (pruebas, lints, etc.).
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# Configuración específica de Flutter.
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/MG-I.png
+    - assets/MG-I-T.png
+    - assets/MG-I-T-O.png
+    - assets/MG-I-C.png
+    - assets/MG Studios/MG-S-L.png
+    - assets/MG Studios/MG-S-L-T.png
+    - assets/MG Studios/MG-S-L-T-C.png
+    - assets/MG Studios/MG-S-L-C.png
+    - assets/MG Studios/MG-D.png
+    - assets/MG-B.png

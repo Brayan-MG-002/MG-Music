@@ -26,7 +26,7 @@ or her management team.
 ## 🌌 Sobre el proyecto (ES)
 
 MG Music es un proyecto de reproductor de música personal.
-Incluye comportamientos visuales y de experiencia únicos cuando se
+Incluye comportamientos visuales y de experiencia únicas cuando se
 detectan canciones de Ado, sin dejar de funcionar como un reproductor
 normal para otros artistas.
 
@@ -84,5 +84,4 @@ MG Music existe gracias al profundo amor y admiración que siento por Ado.
 Esta aplicación nació del deseo de escuchar su música en un reproductor
 pensado especialmente para sus canciones, su ambiente y lo que su música
 me hace sentir.k
-Es un proyecto personal hecho con respeto, cuidado y pasión genuina.
 Es un proyecto personal hecho con respeto, cuidado y pasión genuina.

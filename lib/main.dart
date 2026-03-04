@@ -20,6 +20,13 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
+/// Global key to show snackbars from anywhere in the app
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
+/// Global key for navigation from outside widgets
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 /// Aplicación principal
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -27,6 +34,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      navigatorKey: navigatorKey,
       title: 'MG Music',
       debugShowCheckedModeBanner: false,
       home: const AppEntryGate(child: SplashScreen()),

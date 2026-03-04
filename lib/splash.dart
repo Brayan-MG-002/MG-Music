@@ -71,9 +71,8 @@ class _SplashScreenState extends State<SplashScreen>
     _navigateToMainScreen(isTv);
   }
 
-  /// Detecta si el dispositivo es TV o PC
+  /// Detecta si el dispositivo es TV
   Future<bool> _detectDeviceType() async {
-    if (Platform.isWindows || Platform.isLinux) return true;
     if (!Platform.isAndroid) return false;
 
     try {

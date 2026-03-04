@@ -9,7 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mg_music/Logic/song_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart'; // For SnackBar & Dialogs
+import 'package:url_launcher/url_launcher.dart';
 import 'package:mg_music/notification_channel.dart';
+import 'package:mg_music/main.dart'; // Para navigatorKey
 
 /// Gestor centralizado de reproducción de audio con soporte para playlists,
 /// shuffle, repeat, sleep timer y preferencias de usuario
@@ -501,26 +504,32 @@ class AudioPlayerManager with WidgetsBindingObserver {
     Duration startPos = Duration.zero;
 
     if (mode == startupLast) {
-      final prefs = await SharedPreferences.getInstance();
-      final lastPath = prefs.getString('last_played_path');
-      final lastPos = prefs.getInt('last_played_position') ?? 0;
-
-      if (lastPath != null) {
-        try {
-          songToLoad = allSongs.firstWhere((s) => s.path == lastPath);
-          startPos = Duration(milliseconds: lastPos);
-        } catch (_) {
-          // Fallback a Ado si la canción no existe
-        }
+      songToLoad = await _loadLastPlayedSong(allSongs);
+      if (songToLoad != null) {
+        final prefs = await SharedPreferences.getInstance();
+        startPos = Duration(
+          milliseconds: prefs.getInt('last_played_position') ?? 0,
+        );
       }
     } else if (mode == startupAdo) {
       final adoSongs = allSongs
           .where((s) => s.artist.toLowerCase().contains('ado'))
           .toList();
-      songToLoad = adoSongs.isNotEmpty
-          ? adoSongs[Random().nextInt(adoSongs.length)]
-          : allSongs.first;
-      startPos = Duration.zero;
+      if (adoSongs.isNotEmpty) {
+        songToLoad = adoSongs[Random().nextInt(adoSongs.length)];
+        startPos = Duration.zero;
+      } else {
+        // Fallback a Last Played si no hay canciones de Ado
+        songToLoad = await _loadLastPlayedSong(allSongs);
+        if (songToLoad != null) {
+          final prefs = await SharedPreferences.getInstance();
+          startPos = Duration(
+            milliseconds: prefs.getInt('last_played_position') ?? 0,
+          );
+        } else {
+          songToLoad = allSongs.first;
+        }
+      }
     }
 
     if (songToLoad != null) {
@@ -531,6 +540,17 @@ class AudioPlayerManager with WidgetsBindingObserver {
     _cachedSongs = null; // Liberar la memoria del caché de canciones
   }
 
+  Future<LocalSong?> _loadLastPlayedSong(List<LocalSong> allSongs) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastPath = prefs.getString('last_played_path');
+    if (lastPath != null) {
+      try {
+        return allSongs.firstWhere((s) => s.path == lastPath);
+      } catch (_) {}
+    }
+    return null;
+  }
+
   /// Reproducción interna de una canción
   Future<void> _playInternal(LocalSong song) async {
     _isManualSkip = true;
@@ -539,13 +559,18 @@ class AudioPlayerManager with WidgetsBindingObserver {
       currentSongNotifier.value = song;
       await _playSongAsCurrentWithoutQueue(song, forceUpdate: true);
 
+      // Asegurar que la reproducción inicie cuando se selecciona una canción
+      await _player.play();
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_played_path', song.path);
       await prefs.setInt('last_played_position', 0);
 
       // Mostrar notificación inmediatamente
       await _updateNotification();
-    } catch (e) {}
+    } catch (e) {
+      _showErrorDialog(e);
+    }
   }
 
   /// Reproduce una canción CON la cola completa para que la notificación vea siguiente/anterior
@@ -632,7 +657,9 @@ class AudioPlayerManager with WidgetsBindingObserver {
 
       await _applyAdoVolumeBoost(song);
       await _updateNotification();
-    } catch (e) {}
+    } catch (e) {
+      _showErrorDialog(e);
+    }
   }
 
   /// Carga una canción sin reproducir
@@ -698,7 +725,9 @@ class AudioPlayerManager with WidgetsBindingObserver {
 
       // Actualizar notificación
       await _updateNotification();
-    } catch (e) {}
+    } catch (e) {
+      _showErrorDialog(e);
+    }
   }
 
   /// Reproduce el siguiente item de la cola especial
@@ -820,5 +849,82 @@ class AudioPlayerManager with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _player.dispose();
+  }
+
+  /// Muestra un modal con el error para que el usuario pueda reportarlo
+  void _showErrorDialog(Object error) {
+    if (navigatorKey.currentState != null &&
+        navigatorKey.currentState!.overlay != null) {
+      final context = navigatorKey.currentState!.overlay!.context;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey.shade900,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+            side: BorderSide(color: Colors.red.shade900, width: 2),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 10),
+              Text(
+                'Error de Reproducción',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Ha ocurrido un problema al intentar reproducir esta pista. Por favor, reporta este error para que podamos solucionarlo.',
+                style: TextStyle(color: Colors.white70, height: 1.5),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Código: $error',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _reportErrorToWhatsApp(error);
+              },
+              child: const Text('Reportar Error'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      print('Playback Error: $error');
+    }
+  }
+
+  /// Abrir WhatsApp con el error prellenado
+  Future<void> _reportErrorToWhatsApp(Object error) async {
+    final message =
+        'Hola MG Studios, estoy reportando un error de reproducción en la app MG Music.\n\nAquí están los detalles del error:\n$error';
+    final urlString =
+        'https://wa.me/573168060939?text=${Uri.encodeComponent(message)}';
+    final Uri url = Uri.parse(urlString);
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 }

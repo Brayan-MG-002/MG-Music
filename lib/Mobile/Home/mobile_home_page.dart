@@ -70,20 +70,35 @@ class MobileHomePageState extends State<MobileHomePage>
       _playerManager.isRestoringNotifier.value = true;
     }
 
-    // 2. Escaneo en segundo plano
-    final freshSongs = await _songFetcher.getSongs();
+    // 2. Escaneo en segundo plano mediante Stream para carga progresiva
+    _songFetcher
+        .getSongsStream(chunkSize: 15)
+        .listen(
+          (chunk) {
+            if (!mounted) return;
 
-    if (mounted) {
-      setState(() {
-        _allSongs = freshSongs;
-        _displayedSongs = List.from(freshSongs);
-        _applySort();
-        _isLoading = false;
-      });
-    }
+            setState(() {
+              final existingIds = _allSongs.map((s) => s.id).toSet();
+              for (var song in chunk) {
+                if (!existingIds.contains(song.id)) {
+                  _allSongs.add(song);
+                }
+              }
+              _displayedSongs = List.from(_allSongs);
+              _applySort();
 
-    await _playerManager.executeStartupBehavior(freshSongs);
-    if (mounted) _scrollToCurrentSong();
+              // Si es el primer chunk, quitamos la pantalla de carga inmediatamente
+              if (_isLoading) {
+                _isLoading = false;
+              }
+            });
+          },
+          onDone: () async {
+            // Cuando termina la carga de todas las canciones
+            await _playerManager.executeStartupBehavior(_allSongs);
+            if (mounted) _scrollToCurrentSong();
+          },
+        );
   }
 
   // Aplica el ordenamiento actual basado en _currentSortMode

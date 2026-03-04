@@ -43,32 +43,47 @@ class MobileFullPlayer extends StatelessWidget {
                 // Carátula
                 Expanded(
                   child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(50.0), // Más pequeña
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.shade900.withOpacity(0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: song.artwork != null
-                                ? Image.memory(song.artwork!, fit: BoxFit.cover)
-                                : Image.asset(
-                                    'assets/MG-I-T.png',
-                                    fit: BoxFit.cover,
+                    // Extraer screen width para hacer el padding resposivo
+                    // (Padding dinámico al 10% del ancho en pantallas pequeñas, max 40 en grandes)
+                    child: Builder(
+                      builder: (context) {
+                        final paddingValue =
+                            MediaQuery.of(context).size.width * 0.08;
+                        return Padding(
+                          padding: EdgeInsets.all(
+                            paddingValue.clamp(15.0, 40.0),
+                          ), // Responsive padding
+                          child: AspectRatio(
+                            aspectRatio: 1,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.blue.shade900.withOpacity(
+                                      0.4,
+                                    ),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
                                   ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: song.artwork != null
+                                    ? Image.memory(
+                                        song.artwork!,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Image.asset(
+                                        'assets/MG-I-T.png',
+                                        fit: BoxFit.cover,
+                                      ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ),

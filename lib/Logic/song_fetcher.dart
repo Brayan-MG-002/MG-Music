@@ -23,12 +23,13 @@ class SongFetcher {
     return audio.isGranted || storage.isGranted;
   }
 
-  /// Obtiene todas las canciones del dispositivo con filtros
-  Future<List<LocalSong>> getSongs() async {
+  /// Obtiene las canciones en fragmentos (chunks) usando un Stream.
+  /// Primero carga las primeras [chunkSize] canciones inmediatamente con su artwork.
+  /// Luego sigue enviando bloques de [chunkSize] canciones en segundo plano.
+  Stream<List<LocalSong>> getSongsStream({int chunkSize = 20}) async* {
     final hasPermission = await _requestPermission();
-    if (!hasPermission) return [];
+    if (!hasPermission) return;
 
-    final List<LocalSong> songs = [];
     final queriedSongs = await _audioQuery.querySongs(
       sortType: SongSortType.TITLE,
       orderType: OrderType.ASC_OR_SMALLER,
@@ -36,13 +37,12 @@ class SongFetcher {
       ignoreCase: true,
     );
 
+    List<LocalSong> currentChunk = [];
+
     for (final song in queriedSongs) {
       if (song.isMusic != true) continue;
-
-      // Filtrar audios muy cortos (notas de voz, etc)
       if (song.duration != null && song.duration! < 30 * 1000) continue;
 
-      // Filtrar carpetas de aplicaciones de mensajería
       final path = song.data.toLowerCase();
       if (path.contains('whatsapp') ||
           path.contains('telegram') ||
@@ -50,7 +50,6 @@ class SongFetcher {
         continue;
       }
 
-      // Obtener artwork (portada del álbum)
       Uint8List? artwork;
       try {
         artwork = await _audioQuery.queryArtwork(
@@ -60,7 +59,7 @@ class SongFetcher {
         );
       } catch (_) {}
 
-      songs.add(
+      currentChunk.add(
         LocalSong(
           id: song.id,
           title: song.title,
@@ -69,8 +68,30 @@ class SongFetcher {
           artwork: artwork,
         ),
       );
+
+      // Cuando el chunk se llena, emitirlo y crear uno nuevo
+      if (currentChunk.length >= chunkSize) {
+        yield List.from(currentChunk);
+        currentChunk.clear();
+
+        // Pausa ligera para no congelar el Event Loop y permitir renderizado
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
     }
 
+    // Emitir cualquier canción restante
+    if (currentChunk.isNotEmpty) {
+      yield List.from(currentChunk);
+    }
+  }
+
+  /// Método legacy reescrito (no recomendado para UI rápida, pero funcional
+  /// si otras clases dependen de obtener la lista completa al instante)
+  Future<List<LocalSong>> getSongs() async {
+    final songs = <LocalSong>[];
+    await for (final chunk in getSongsStream()) {
+      songs.addAll(chunk);
+    }
     return songs;
   }
 }

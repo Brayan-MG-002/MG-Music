@@ -41,11 +41,21 @@ class PermissionsScreen extends StatefulWidget {
               'Para controlar la reproducción desde fuera de la app y en la pantalla de bloqueo.',
           'icon': Ionicons.notifications,
         });
-      } else {
+      } else if (sdkInt >= 30) {
+        // Android 11 y 12 (API 30-32)
+        // Pedimos storage y (opcionalmente) manageExternalStorage si la librería lo requiere
         perms.add({
           'permission': Permission.storage,
           'title': 'Acceso a Almacenamiento',
           'subtitle': 'Para buscar y reproducir todas tus canciones.',
+          'icon': Ionicons.folder_open,
+        });
+      } else {
+        // Android 10 e inferiores (API <= 29)
+        perms.add({
+          'permission': Permission.storage,
+          'title': 'Acceso a Almacenamiento',
+          'subtitle': 'Para buscar y reproducir todas tus canciones locales.',
           'icon': Ionicons.folder_open,
         });
       }

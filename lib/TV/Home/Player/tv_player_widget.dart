@@ -3,10 +3,13 @@
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:animations_plus/animations_plus.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/Logic/audio_player_manager.dart';
 import 'package:mg_music/Logic/song_model.dart';
 import 'package:mg_music/TV/tv_focusable_item.dart';
+import 'package:mg_music/services/theme_service.dart';
+import 'package:provider/provider.dart';
 
 class TvPlayerWidget extends StatelessWidget {
   final VoidCallback? onTap;
@@ -14,8 +17,10 @@ class TvPlayerWidget extends StatelessWidget {
   const TvPlayerWidget({super.key, this.onTap});
 
   @override
+  /// Construye el mini reproductor con carátula, progreso y controles
   Widget build(BuildContext context) {
     final playerManager = AudioPlayerManager();
+    final mode = context.watch<ThemeService>().mode;
 
     return ValueListenableBuilder<LocalSong?>(
       valueListenable: playerManager.currentSongNotifier,
@@ -24,106 +29,140 @@ class TvPlayerWidget extends StatelessWidget {
           return const SizedBox.shrink(); // Si no hay canción, espacio vacío (sin Spacer/Expanded)
         }
 
-        // Modo Mini Reproductor Normal
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Row(
-            children: [
-              // Zona Principal: Info y Carátula (Expande el player)
-              Expanded(
-                child: TvFocusableItem(
-                  onTap: onTap,
-                  borderRadius: 15,
-                  child: Row(
-                    children: [
-                      RotatingArtwork(
-                        artwork: currentSong.artwork,
-                        isPlayingNotifier: playerManager.isPlayingNotifier,
-                        size: 50,
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              currentSong.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            ValueListenableBuilder<Duration>(
-                              valueListenable: playerManager.positionNotifier,
-                              builder: (context, position, _) {
-                                final duration =
-                                    playerManager.durationNotifier.value;
-                                final double progress =
-                                    (duration.inMilliseconds > 0)
-                                    ? position.inMilliseconds /
-                                          duration.inMilliseconds
-                                    : 0.0;
-                                return LinearProgressIndicator(
-                                  value: progress.clamp(0.0, 1.0),
-                                  backgroundColor: Colors.grey.shade800,
-                                  valueColor:
-                                      const AlwaysStoppedAnimation<Color>(
-                                        Colors.blue,
-                                      ),
-                                  minHeight: 3,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+        return SimpleFadeAnimation(
+          duration: const Duration(milliseconds: 300),
+          child: SimpleSlideAnimation(
+            duration: const Duration(milliseconds: 300),
+            direction: SlideDirection.up,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: AppColors.songItemGradient(mode),
                 ),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: AppColors.themeBorder(mode)),
               ),
-              const SizedBox(width: 10),
-              // Botón Play/Pause Independiente
-              ValueListenableBuilder<bool>(
-                valueListenable: playerManager.isPlayingNotifier,
-                builder: (context, isPlaying, _) {
-                  return TvFocusableItem(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TvFocusableItem(
+                      onTap: onTap,
+                      borderRadius: 15,
+                      child: Row(
+                        children: [
+                          RotatingArtwork(
+                            artwork: currentSong.artwork,
+                            isPlayingNotifier: playerManager.isPlayingNotifier,
+                            size: 50,
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  currentSong.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary(mode),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                ValueListenableBuilder<Duration>(
+                                  valueListenable:
+                                      playerManager.positionNotifier,
+                                  builder: (context, position, _) {
+                                    final duration =
+                                        playerManager.durationNotifier.value;
+                                    final double progress =
+                                        (duration.inMilliseconds > 0)
+                                            ? position.inMilliseconds /
+                                                duration.inMilliseconds
+                                            : 0.0;
+                                    return Container(
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade800,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: FractionallySizedBox(
+                                          widthFactor:
+                                              progress.clamp(0.0, 1.0),
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
+                                                colors: mode ==
+                                                        AppThemeMode.dark
+                                                    ? [
+                                                        Colors.blue.shade900,
+                                                        Colors.black
+                                                      ]
+                                                    : [
+                                                        Colors.blue.shade500,
+                                                        Colors.white
+                                                      ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: playerManager.isPlayingNotifier,
+                    builder: (context, isPlaying, _) {
+                      return TvFocusableItem(
+                        borderRadius: 50,
+                        onTap: playerManager.togglePlayPause,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Icon(
+                            isPlaying ? Ionicons.pause : Ionicons.play,
+                            color: AppColors.textPrimary(mode),
+                            size: 24,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 10),
+                  TvFocusableItem(
                     borderRadius: 50,
-                    onTap: playerManager.togglePlayPause,
+                    onTap: playerManager.next,
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Icon(
-                        isPlaying ? Ionicons.pause : Ionicons.play,
-                        color: Colors.white,
+                        Ionicons.play_skip_forward,
+                        color: AppColors.textPrimary(mode),
                         size: 24,
                       ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(width: 10),
-              // Botón Siguiente Independiente
-              TvFocusableItem(
-                borderRadius: 50,
-                onTap: playerManager.next,
-                child: const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(
-                    Ionicons.play_skip_forward,
-                    color: Colors.white,
-                    size: 24,
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
@@ -152,6 +191,7 @@ class _RotatingArtworkState extends State<RotatingArtwork>
   late AnimationController _controller;
 
   @override
+  /// Inicializa el controlador y sincroniza con el estado de reproducción
   void initState() {
     super.initState();
     _controller = AnimationController(
@@ -160,11 +200,11 @@ class _RotatingArtworkState extends State<RotatingArtwork>
     );
 
     widget.isPlayingNotifier.addListener(_checkPlaybackState);
-    // Verificar el estado inicial inmediatamente por si ya está sonando al volver
     _checkPlaybackState();
   }
 
   @override
+  /// Libera recursos y quita listeners
   void dispose() {
     widget.isPlayingNotifier.removeListener(_checkPlaybackState);
     _controller.dispose();
@@ -180,6 +220,7 @@ class _RotatingArtworkState extends State<RotatingArtwork>
   }
 
   @override
+  /// Dibuja la carátula con rotación animada
   Widget build(BuildContext context) {
     return RotationTransition(
       turns: _controller,

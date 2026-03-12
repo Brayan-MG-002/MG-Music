@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mg_music/Logic/song_model.dart';
 
-/// Gestor singleton de playlists personalizadas del usuario
 class PlaylistManager {
   static final PlaylistManager _instance = PlaylistManager._internal();
   factory PlaylistManager() => _instance;
@@ -21,7 +20,7 @@ class PlaylistManager {
     playlistsNotifier.value = prefs.getStringList('playlist_names') ?? [];
   }
 
-  /// Obtiene el notificador de canciones para una playlist
+  /// Obtiene el notificador de canciones de una playlist
   ValueNotifier<List<String>> getSongsNotifier(String playlistName) {
     if (!_playlistSongsNotifiers.containsKey(playlistName)) {
       _playlistSongsNotifiers[playlistName] = ValueNotifier([]);
@@ -30,7 +29,7 @@ class PlaylistManager {
     return _playlistSongsNotifiers[playlistName]!;
   }
 
-  /// Obtiene el notificador de portada para una playlist
+  /// Obtiene el notificador de portada de una playlist
   ValueNotifier<String?> getCoverNotifier(String playlistName) {
     if (!_playlistCoverNotifiers.containsKey(playlistName)) {
       _playlistCoverNotifiers[playlistName] = ValueNotifier(null);
@@ -129,5 +128,31 @@ class PlaylistManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('playlist_cover_$playlistName', songPath);
     _playlistCoverNotifiers[playlistName]?.value = songPath;
+  }
+
+  /// Crea o actualiza una playlist automática con las canciones dadas
+  Future<void> createOrUpdateAutoPlaylist(
+    String name,
+    List<LocalSong> songs,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final paths = songs.map((s) => s.path).toList();
+
+    // Registrar la playlist si no existe
+    if (!playlistsNotifier.value.contains(name)) {
+      final newList = List<String>.from(playlistsNotifier.value)..add(name);
+      playlistsNotifier.value = newList;
+      await prefs.setStringList('playlist_names', newList);
+    }
+
+    // Sobreescribir canciones
+    await prefs.setStringList('playlist_songs_$name', paths);
+    _playlistSongsNotifiers[name]?.value = List.from(paths);
+
+    // Portada = primera canción de la lista
+    if (paths.isNotEmpty) {
+      await prefs.setString('playlist_cover_$name', paths.first);
+      _playlistCoverNotifiers[name]?.value = paths.first;
+    }
   }
 }

@@ -3,7 +3,7 @@
 
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:mg_music/models/version_model.dart';
+import 'package:mg_music/Logic/version_model.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
@@ -50,7 +50,7 @@ class UpdateService {
       final packageInfo = await PackageInfo.fromPlatform();
       return packageInfo.version;
     } catch (e) {
-      return '1.0.1';
+      return '1.1.0';
     }
   }
 

@@ -41,9 +41,6 @@ class AudioServiceAdapter {
   }) async {
     try {
       if (_handler == null) return;
-
-      // Aquí iría la lógica de actualizar estado
-      // Por ahora, solo loguear
     } catch (e) {}
   }
 }

@@ -4,14 +4,18 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:mg_music/services/theme_service.dart';
 import 'package:mg_music/Mobile/mobile_main_screen.dart';
 import 'package:mg_music/permissions_screen.dart';
 import 'package:mg_music/TV/tv_main_screen.dart';
 import 'package:mg_music/services/update_service.dart';
 import 'package:mg_music/screens/update_dialog.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:mg_music/services/animated_theme_switcher.dart';
 
-/// Pantalla inicial de splash con animación y detección automática de dispositivo
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,44 +23,37 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
+class _SplashScreenState extends State<SplashScreen> {
   bool _isTv = false;
+  bool _isExiting = false;
 
   @override
+  /// Inicializa el splash y arranca la navegación
   void initState() {
     super.initState();
-    _setupAnimation();
     _initializeAndNavigate();
   }
 
-  /// Configura la animación de transición
-  void _setupAnimation() {
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-
-    _animation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    _controller.forward();
-  }
-
-  /// Inicializa la app y navega a la pantalla correcta
+  /// Inicializa y navega a la pantalla adecuada
   Future<void> _initializeAndNavigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    // Detectar si es TV
-    bool isTv = await _detectDeviceType();
+    final isTv = await _detectDeviceType();
     if (!mounted) return;
 
-    // Verificar permisos
+    if (isTv) {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
+
     final allGranted = await PermissionsScreen.checkAllPermissions(isTv);
     if (!mounted) return;
 
@@ -67,33 +64,38 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    // Navegar a pantalla principal
-    _navigateToMainScreen(isTv);
+    setState(() => _isExiting = true);
+
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation1, animation2) => _buildMainApp(isTv),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _checkForUpdates();
+    });
   }
 
-  /// Detecta si el dispositivo es TV
+  /// Detecta si el dispositivo es TV o PC
   Future<bool> _detectDeviceType() async {
+    if (Platform.isWindows || Platform.isLinux) return true;
     if (!Platform.isAndroid) return false;
 
     try {
       final deviceInfo = await DeviceInfoPlugin().androidInfo;
-      return deviceInfo.systemFeatures.contains('android.software.leanback');
+      return deviceInfo.systemFeatures.contains('android.software.leanback') ||
+          deviceInfo.systemFeatures.contains(
+            'android.hardware.type.television',
+          );
     } catch (_) {
       return false;
     }
-  }
-
-  /// Navega a la pantalla principal con tema correspondiente
-  void _navigateToMainScreen(bool isTv) {
-    _isTv = isTv;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => _buildMainApp(isTv)),
-    );
-
-    // Verificar actualizaciones después de navegar
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _checkForUpdates();
-    });
   }
 
   /// Verifica si hay actualizaciones disponibles
@@ -112,60 +114,92 @@ class _SplashScreenState extends State<SplashScreen>
 
   /// Construye la app principal con tema
   Widget _buildMainApp(bool isTv) {
-    final baseTheme = ThemeData(
-      brightness: Brightness.dark,
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.deepPurple,
-        brightness: Brightness.dark,
-      ),
-    );
+    _isTv = isTv;
 
-    final theme = isTv
-        ? baseTheme.copyWith(
-            navigationRailTheme: NavigationRailThemeData(
-              indicatorShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: const BorderSide(color: Colors.cyanAccent, width: 3),
-              ),
-              indicatorColor: Colors.transparent,
-            ),
-          )
-        : baseTheme;
-
-    return MaterialApp(
-      theme: theme,
-      home: isTv ? const TvMainScreen() : const MobileMainScreen(),
+    return AnimatedThemeSwitcher(
+      child: isTv ? const TvMainScreen() : const MobileMainScreen(),
     );
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
+  /// Construye la UI del splash
   Widget build(BuildContext context) {
+    final mode = context.watch<ThemeService>().mode;
+
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: FadeTransition(
-          opacity: _animation,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset('assets/MG-I-T.png', width: 250),
-              const SizedBox(height: 20),
-              const Text(
-                "Inspirada en Ado",
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 18,
-                  fontStyle: FontStyle.italic,
-                ),
+      backgroundColor: AppColors.background(mode),
+      body: AnimatedOpacity(
+        opacity: _isExiting ? 0.0 : 1.0,
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeOut,
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.background(mode),
+                AppColors.background(mode),
+                AppColors.primaryBlueMid.withOpacity(0.4),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+          child: AnimationLimiter(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimationConfiguration.staggeredList(
+                    position: 0,
+                    duration: const Duration(milliseconds: 1000),
+                    child: SlideAnimation(
+                      verticalOffset: 50.0,
+                      child: ScaleAnimation(
+                        child: FadeInAnimation(
+                          child: Image.asset('assets/MG-I-T.png', width: 250),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: AnimationConfiguration.toStaggeredList(
+                      duration: const Duration(milliseconds: 1000),
+                      delay: const Duration(milliseconds: 200),
+                      childAnimationBuilder: (widget) => SlideAnimation(
+                        horizontalOffset: 50.0,
+                        child: FadeInAnimation(child: widget),
+                      ),
+                      children: [
+                        Text(
+                          "Inspirada en ",
+                          style: TextStyle(
+                            color: AppColors.textSecondary(mode),
+                            fontSize: 18,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        ScaleAnimation(
+                          child: Text(
+                            "Ado",
+                            style: TextStyle(
+                              color: AppColors.primaryBlueMid,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

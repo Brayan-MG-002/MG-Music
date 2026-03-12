@@ -1,13 +1,19 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Gestión de solicitud de permisos con soporte Mobile y TV
+// Pantalla de solicitud de permisos para Mobile y TV
 
+import 'dart:io' show Platform;
+
+import 'package:animations/animations.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mg_music/TV/tv_focusable_item.dart';
 import 'package:mg_music/splash.dart';
+import 'package:mg_music/services/theme_service.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:io' show Platform;
-import 'package:device_info_plus/device_info_plus.dart';
 
 /// Pantalla de solicitud de permisos adaptativa para Mobile y TV
 class PermissionsScreen extends StatefulWidget {
@@ -30,33 +36,25 @@ class PermissionsScreen extends StatefulWidget {
       if (sdkInt >= 33) {
         perms.add({
           'permission': Permission.audio,
-          'title': 'Acceso a Audio y Multimedia',
-          'subtitle': 'Para buscar y reproducir todas tus canciones.',
-          'icon': Ionicons.musical_note,
+          'title': 'Música y Audio',
+          'subtitle':
+              'Permite el acceso para encontrar y reproducir tus canciones con la mejor calidad.',
+          'icon': Ionicons.musical_notes,
         });
         perms.add({
           'permission': Permission.notification,
           'title': 'Notificaciones',
           'subtitle':
-              'Para controlar la reproducción desde fuera de la app y en la pantalla de bloqueo.',
-          'icon': Ionicons.notifications,
-        });
-      } else if (sdkInt >= 30) {
-        // Android 11 y 12 (API 30-32)
-        // Pedimos storage y (opcionalmente) manageExternalStorage si la librería lo requiere
-        perms.add({
-          'permission': Permission.storage,
-          'title': 'Acceso a Almacenamiento',
-          'subtitle': 'Para buscar y reproducir todas tus canciones.',
-          'icon': Ionicons.folder_open,
+              'Mantén el control de tu música desde la barra de estado y pantalla de bloqueo.',
+          'icon': Ionicons.notifications_outline,
         });
       } else {
-        // Android 10 e inferiores (API <= 29)
         perms.add({
           'permission': Permission.storage,
-          'title': 'Acceso a Almacenamiento',
-          'subtitle': 'Para buscar y reproducir todas tus canciones locales.',
-          'icon': Ionicons.folder_open,
+          'title': 'Acceso a Archivos',
+          'subtitle':
+              'Necesario para escanear tu biblioteca musical y mostrar tus canciones.',
+          'icon': Ionicons.folder_open_outline,
         });
       }
     }
@@ -76,7 +74,6 @@ class PermissionsScreen extends StatefulWidget {
 }
 
 class _PermissionsScreenState extends State<PermissionsScreen> {
-  late PageController _pageController;
   int _currentPage = 0;
   List<Map<String, dynamic>> _permissionsToRequest = [];
   bool _isLoading = true;
@@ -84,7 +81,6 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
     _checkPermissionsAndBuildList();
   }
 
@@ -100,6 +96,20 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       }
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final bool themeConfigured =
+        prefs.getBool('theme_selected_onboarding') ?? false;
+
+    if (!themeConfigured) {
+      missingPermissions.add({
+        'isThemeSelection': true,
+        'title': 'Experiencia Visual',
+        'subtitle':
+            'Elige el tema con el que prefieres usar la aplicación. Puedes cambiarlo luego en Ajustes.',
+        'icon': Ionicons.color_palette_outline,
+      });
+    }
+
     if (!mounted) return;
 
     if (missingPermissions.isEmpty) {
@@ -112,8 +122,16 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     }
   }
 
-  /// Solicita un permiso específico
-  Future<void> _requestPermission(Permission permission) async {
+  /// Solicita un permiso específico o guarda la preferencia de tema
+  Future<void> _requestPermission(Map<String, dynamic> item) async {
+    if (item['isThemeSelection'] == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('theme_selected_onboarding', true);
+      _goToNextPage();
+      return;
+    }
+
+    final permission = item['permission'] as Permission;
     final status = await permission.request();
 
     if (status.isGranted || status.isLimited) {
@@ -128,17 +146,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     }
   }
 
-  /// Avanza a la siguiente página de permisos
+  /// Avanza a la siguiente "tarjeta" de permisos con animación
   void _goToNextPage() {
     if (_currentPage < _permissionsToRequest.length - 1) {
       setState(() {
         _currentPage++;
       });
-      _pageController.animateToPage(
-        _currentPage,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
     } else {
       _navigateToSplash();
     }
@@ -153,6 +166,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   @override
+  /// Construye la UI de la pantalla de permisos
   Widget build(BuildContext context) {
     final horizontalPadding = widget.isTv ? 100.0 : 24.0;
     final imageSize = widget.isTv ? 200.0 : 150.0;
@@ -160,175 +174,362 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     final subtitleSize = widget.isTv ? 20.0 : 16.0;
     final buttonTextSize = widget.isTv ? 18.0 : 16.0;
 
+    final mode = context.watch<ThemeService>().mode;
+
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: Colors.blue.shade900),
-            )
-          : PageView.builder(
-              controller: _pageController,
-              itemCount: _permissionsToRequest.length,
-              physics: const NeverScrollableScrollPhysics(),
-              itemBuilder: (context, index) {
-                if (_permissionsToRequest.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                final item = _permissionsToRequest[index];
-                return _buildPermissionPage(
-                  icon: item['icon'],
-                  title: item['title'],
-                  subtitle: item['subtitle'],
-                  imageSize: imageSize,
-                  horizontalPadding: horizontalPadding,
-                  onPressed: () => _requestPermission(item['permission']),
-                  titleSize: titleSize,
-                  subtitleSize: subtitleSize,
-                  buttonTextSize: buttonTextSize,
-                );
-              },
-            ),
+      backgroundColor: AppColors.background(mode),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.background(mode),
+              AppColors.background(mode),
+              AppColors.primaryBlueMid.withOpacity(0.4),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: _isLoading
+              ? Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.primaryBlueMid,
+                  ),
+                )
+              : Center(
+                  child: PageTransitionSwitcher(
+                    duration: const Duration(milliseconds: 500),
+                    transitionBuilder:
+                        (child, primaryAnimation, secondaryAnimation) {
+                          return SharedAxisTransition(
+                            animation: primaryAnimation,
+                            secondaryAnimation: secondaryAnimation,
+                            transitionType: SharedAxisTransitionType.horizontal,
+                            fillColor: Colors.transparent,
+                            child: child,
+                          );
+                        },
+                    child: _permissionsToRequest.isEmpty
+                        ? const SizedBox.shrink()
+                        : _buildPermissionPage(
+                            key: ValueKey(_currentPage),
+                            item: _permissionsToRequest[_currentPage],
+                            imageSize: imageSize,
+                            horizontalPadding: horizontalPadding,
+                            onPressed: () => _requestPermission(
+                              _permissionsToRequest[_currentPage],
+                            ),
+                            titleSize: titleSize,
+                            subtitleSize: subtitleSize,
+                            buttonTextSize: buttonTextSize,
+                            mode: mode,
+                          ),
+                  ),
+                ),
+        ),
+      ),
     );
   }
 
   /// Construye una página de solicitud de permiso
   Widget _buildPermissionPage({
-    required IconData icon,
-    required String title,
-    required String subtitle,
+    Key? key,
+    required Map<String, dynamic> item,
     required double imageSize,
     required double horizontalPadding,
     required VoidCallback onPressed,
     required double titleSize,
     required double subtitleSize,
     required double buttonTextSize,
+    required AppThemeMode mode,
   }) {
+    final bool isThemeSelection = item['isThemeSelection'] == true;
+    final String title = item['title'];
+    final String subtitle = item['subtitle'];
+    final IconData icon = item['icon'];
     return Padding(
+      key: key,
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Image.asset('assets/MG-I-T.png', width: imageSize),
-          const SizedBox(height: 32),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: titleSize,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+        children: AnimationConfiguration.toStaggeredList(
+          duration: const Duration(milliseconds: 500),
+          childAnimationBuilder: (widget) => SlideAnimation(
+            verticalOffset: 50.0,
+            child: FadeInAnimation(child: widget),
+          ),
+          children: [
+            Image.asset('assets/MG-I-T.png', width: imageSize),
+            const SizedBox(height: 32),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: titleSize,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(mode),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: subtitleSize, color: Colors.grey),
-          ),
-          const SizedBox(height: 40),
-          widget.isTv
-              ? TvFocusableItem(
-                  onTap: onPressed,
-                  borderRadius: 30,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, color: Colors.white),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Conceder Permiso',
-                        style: TextStyle(
-                          fontSize: buttonTextSize,
-                          color: Colors.white,
+            const SizedBox(height: 16),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: subtitleSize,
+                color: AppColors.textSecondary(mode),
+              ),
+            ),
+            const SizedBox(height: 40),
+            if (isThemeSelection)
+              _buildThemeSelector(mode)
+            else
+              widget.isTv
+                  ? TvFocusableItem(
+                      onTap: onPressed,
+                      borderRadius: 30,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.primaryBlueMid,
+                              AppColors.background(mode),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: AppColors.themeBorder(mode),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon, color: AppColors.textPrimary(mode)),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Conceder Permiso',
+                              style: TextStyle(
+                                fontSize: buttonTextSize,
+                                color: AppColors.textPrimary(mode),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                )
-              : _FocusableButton(
-                  onTap: onPressed,
-                  color: Colors.blue.shade900,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, color: Colors.white),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Conceder Permiso',
-                        style: TextStyle(
-                          fontSize: buttonTextSize,
-                          color: Colors.white,
+                    )
+                  : _FocusableButton(
+                      onTap: onPressed,
+                      isPrimary: true,
+                      mode: mode,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, color: AppColors.textPrimary(mode)),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Conceder Permiso',
+                            style: TextStyle(
+                              fontSize: buttonTextSize,
+                              color: AppColors.textPrimary(mode),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            const SizedBox(height: 20),
+            if (isThemeSelection)
+              widget.isTv
+                  ? TvFocusableItem(
+                      onTap: onPressed,
+                      borderRadius: 30,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlueMid.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Text(
+                          'Continuar a la App',
+                          style: TextStyle(
+                            color: AppColors.primaryBlueMid,
+                            fontSize: buttonTextSize,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-          const SizedBox(height: 20),
-          // Solo mostrar el botón de omitir si NO es audio ni notificación
-          if (!(title.contains('Audio') || title.contains('Notific'))) ...[
-            widget.isTv
-                ? TvFocusableItem(
-                    onTap: _goToNextPage,
-                    borderRadius: 30,
-                    child: Text(
-                      'Omitir por ahora',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: buttonTextSize - 2,
+                    )
+                  : OutlinedButton(
+                      onPressed: onPressed,
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.primaryBlueMid),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 12,
+                        ),
+                        backgroundColor: AppColors.primaryBlueMid.withOpacity(
+                          0.1,
+                        ),
+                      ),
+                      child: Text(
+                        'Continuar a la App',
+                        style: TextStyle(
+                          color: AppColors.textPrimary(mode),
+                          fontWeight: FontWeight.bold,
+                          fontSize: buttonTextSize,
+                        ),
+                      ),
+                    )
+            else if (!(title.contains('Audio') ||
+                title.contains('Notific'))) ...[
+              widget.isTv
+                  ? TvFocusableItem(
+                      onTap: _goToNextPage,
+                      borderRadius: 30,
+                      child: Text(
+                        'Omitir por ahora',
+                        style: TextStyle(
+                          color: AppColors.textSecondary(mode),
+                          fontSize: buttonTextSize - 2,
+                        ),
+                      ),
+                    )
+                  : _FocusableButton(
+                      onTap: _goToNextPage,
+                      isPrimary: false,
+                      mode: mode,
+                      child: Text(
+                        'Omitir por ahora',
+                        style: TextStyle(
+                          color: AppColors.textSecondary(mode),
+                          fontSize: buttonTextSize - 2,
+                        ),
                       ),
                     ),
-                  )
-                : _FocusableButton(
-                    onTap: _goToNextPage,
-                    color: Colors.transparent,
-                    child: Text(
-                      'Omitir por ahora',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: buttonTextSize - 2,
-                      ),
-                    ),
-                  ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+  /// Construye el selector de tema
+  Widget _buildThemeSelector(AppThemeMode mode) {
+    final themeService = context.watch<ThemeService>();
+    final isDark = themeService.isDark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface(mode),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.themeBorder(mode)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+            color: isDark ? Colors.white : Colors.orange.shade700,
+            size: 28,
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Modo Oscuro',
+                style: TextStyle(
+                  color: AppColors.textPrimary(mode),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                isDark ? 'Activado por defecto' : 'Apagado',
+                style: TextStyle(
+                  color: AppColors.textSecondary(mode),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 20),
+          Switch(
+            value: !isDark,
+            activeColor: AppColors.primaryBlueMid,
+            onChanged: (v) => themeService.toggle(),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-/// Botón enfocable para uso en Mobile y TV
 class _FocusableButton extends StatelessWidget {
   final VoidCallback onTap;
   final Widget child;
-  final Color color;
+  final bool isPrimary;
+  final AppThemeMode mode;
 
   const _FocusableButton({
     required this.onTap,
     required this.child,
-    required this.color,
+    required this.isPrimary,
+    required this.mode,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color,
-      borderRadius: BorderRadius.circular(30),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(30),
-        focusColor: Colors.white.withOpacity(0.1),
-        hoverColor: Colors.white.withOpacity(0.1),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(30)),
-          child: child,
+    return Container(
+      decoration: isPrimary
+          ? BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primaryBlueMid.withOpacity(0.8),
+                  AppColors.background(mode),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: AppColors.themeBorder(mode), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlueMid.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            )
+          : null,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+            child: child,
+          ),
         ),
       ),
     );

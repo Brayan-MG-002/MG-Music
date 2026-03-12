@@ -6,9 +6,9 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'song_model.dart';
 
-/// Gestor para consultar y obtener canciones del dispositivo
 class SongFetcher {
   final OnAudioQuery _audioQuery = OnAudioQuery();
+  static List<LocalSong> _cachedSongs = [];
 
   /// Solicita permisos de audio y almacenamiento
   Future<bool> _requestPermission() async {
@@ -23,13 +23,20 @@ class SongFetcher {
     return audio.isGranted || storage.isGranted;
   }
 
-  /// Obtiene las canciones en fragmentos (chunks) usando un Stream.
-  /// Primero carga las primeras [chunkSize] canciones inmediatamente con su artwork.
-  /// Luego sigue enviando bloques de [chunkSize] canciones en segundo plano.
-  Stream<List<LocalSong>> getSongsStream({int chunkSize = 20}) async* {
-    final hasPermission = await _requestPermission();
-    if (!hasPermission) return;
+  /// Obtiene todas las canciones del dispositivo con filtros
+  Future<List<LocalSong>> getSongs({
+    Function(List<LocalSong>)? onProgress,
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _cachedSongs.isNotEmpty) {
+      if (onProgress != null) onProgress(List.from(_cachedSongs));
+      return _cachedSongs;
+    }
 
+    final hasPermission = await _requestPermission();
+    if (!hasPermission) return [];
+
+    final List<LocalSong> songs = [];
     final queriedSongs = await _audioQuery.querySongs(
       sortType: SongSortType.TITLE,
       orderType: OrderType.ASC_OR_SMALLER,
@@ -37,10 +44,9 @@ class SongFetcher {
       ignoreCase: true,
     );
 
-    List<LocalSong> currentChunk = [];
-
     for (final song in queriedSongs) {
       if (song.isMusic != true) continue;
+
       if (song.duration != null && song.duration! < 30 * 1000) continue;
 
       final path = song.data.toLowerCase();
@@ -59,39 +65,23 @@ class SongFetcher {
         );
       } catch (_) {}
 
-      currentChunk.add(
+      songs.add(
         LocalSong(
           id: song.id,
           title: song.title,
           artist: song.artist ?? 'Artista Desconocido',
           path: song.data,
           artwork: artwork,
+          duration: song.duration,
         ),
       );
 
-      // Cuando el chunk se llena, emitirlo y crear uno nuevo
-      if (currentChunk.length >= chunkSize) {
-        yield List.from(currentChunk);
-        currentChunk.clear();
-
-        // Pausa ligera para no congelar el Event Loop y permitir renderizado
-        await Future.delayed(const Duration(milliseconds: 10));
+      if (songs.length == 15 && onProgress != null) {
+        onProgress(List.from(songs));
       }
     }
 
-    // Emitir cualquier canción restante
-    if (currentChunk.isNotEmpty) {
-      yield List.from(currentChunk);
-    }
-  }
-
-  /// Método legacy reescrito (no recomendado para UI rápida, pero funcional
-  /// si otras clases dependen de obtener la lista completa al instante)
-  Future<List<LocalSong>> getSongs() async {
-    final songs = <LocalSong>[];
-    await for (final chunk in getSongsStream()) {
-      songs.addAll(chunk);
-    }
+    _cachedSongs = songs;
     return songs;
   }
 }

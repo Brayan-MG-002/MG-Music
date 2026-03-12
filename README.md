@@ -4,7 +4,7 @@ A personal music player inspired by **Ado**, created with passion,
 respect, and admiration for music.
 
 Un reproductor de música personal inspirado en **Ado**, creado con pasión,
-respeto y admiración por la música.
+respeto y admiración por la música de Ado.
 
 ---
 
@@ -83,5 +83,5 @@ It is a personal project made with respect, care, and genuine passion.
 MG Music existe gracias al profundo amor y admiración que siento por Ado.
 Esta aplicación nació del deseo de escuchar su música en un reproductor
 pensado especialmente para sus canciones, su ambiente y lo que su música
-me hace sentir.k
+me hace sentir.
 Es un proyecto personal hecho con respeto, cuidado y pasión genuina.

@@ -3,10 +3,14 @@
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:provider/provider.dart';
+import 'package:mg_music/services/theme_service.dart';
 import 'package:mg_music/Logic/audio_player_manager.dart';
 import 'package:mg_music/Logic/song_model.dart';
 import 'package:mg_music/Mobile/Home/Player/mobile_full_player.dart';
+import 'package:mg_music/Logic/audio_player_logic/ado_handler.dart';
 
 class MobileMiniPlayer extends StatefulWidget {
   final VoidCallback? onTap;
@@ -22,10 +26,17 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
     with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _pulseController;
+  int? _lastSongId;
+  bool _isSlideLeft = true;
 
   @override
+  /// Inicializa controladores y escucha cambios de canción
   void initState() {
     super.initState();
+    final manager = AudioPlayerManager();
+    _lastSongId = manager.currentSongNotifier.value?.id;
+    manager.currentSongNotifier.addListener(_onSongChanged);
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
@@ -37,19 +48,51 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
   }
 
   @override
+  /// Libera listeners y controladores
   void dispose() {
+    final manager = AudioPlayerManager();
+    manager.currentSongNotifier.removeListener(_onSongChanged);
     _controller.dispose();
     _pulseController.dispose();
     super.dispose();
   }
 
+  void _onSongChanged() {
+    final manager = AudioPlayerManager();
+    final song = manager.currentSongNotifier.value;
+    if (song != null && song.id != _lastSongId) {
+      final playlist = manager.playlist;
+      final oldIndex = playlist.indexWhere((s) => s.id == _lastSongId);
+      final newIndex = playlist.indexWhere((s) => s.id == song.id);
+
+      bool slideLeft = true;
+      if (oldIndex != -1 && newIndex != -1) {
+        if (oldIndex == playlist.length - 1 && newIndex == 0) {
+          slideLeft = true;
+        } else if (oldIndex == 0 && newIndex == playlist.length - 1) {
+          slideLeft = false;
+        } else {
+          slideLeft = newIndex > oldIndex;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _isSlideLeft = slideLeft;
+          _lastSongId = song.id;
+        });
+      }
+    }
+  }
+
   @override
+  /// Construye el mini reproductor con carátula, texto y controles
   Widget build(BuildContext context) {
     final manager = AudioPlayerManager();
+    final mode = context.watch<ThemeService>().mode;
+
     return ValueListenableBuilder<LocalSong?>(
       valueListenable: manager.currentSongNotifier,
       builder: (context, song, _) {
-        // Si no hay canción, mostramos el logo o un placeholder
         if (song == null) {
           return Center(
             child: Image.asset('assets/MG-I-T.png', width: 30, height: 30),
@@ -59,8 +102,7 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
         return ValueListenableBuilder<bool>(
           valueListenable: manager.isPlayingNotifier,
           builder: (context, isPlaying, _) {
-            // Lógica del Latido (Solo Ado + Reproduciendo)
-            final isAdo = song.artist.toLowerCase().contains('ado');
+            final isAdo = AdoHandler.isAdo(song);
             if (isAdo && isPlaying) {
               if (!_pulseController.isAnimating) {
                 _pulseController.repeat(reverse: true);
@@ -70,146 +112,116 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
               _pulseController.reset();
             }
 
-            // Lógica de Animación Principal (Visualizador y Rotación)
             if (isPlaying) {
               if (!_controller.isAnimating) _controller.repeat();
             } else {
               if (_controller.isAnimating) _controller.stop();
             }
 
-            return AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                return GestureDetector(
-                  onTap:
-                      widget.onTap ??
-                      () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const MobileFullPlayer(),
-                        ),
-                      ),
-                  onHorizontalDragEnd: (details) {
-                    if (details.primaryVelocity! > 0) {
-                      manager.previous();
-                    } else if (details.primaryVelocity! < 0) {
-                      manager.next();
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: Colors.blue.shade900,
-                        width: 1.5,
-                      ),
-                      boxShadow: isAdo
-                          ? [
-                              BoxShadow(
-                                color: Colors.blue.shade900.withOpacity(
-                                  0.6 * _pulseController.value,
+            return AnimationConfiguration.synchronized(
+              duration: const Duration(milliseconds: 800),
+              child: SlideAnimation(
+                verticalOffset: 50.0,
+                child: ScaleAnimation(
+                  scale: 0.5,
+                  curve: Curves.elasticOut,
+                  child: AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      return GestureDetector(
+                        onTap: () async {
+                          if (widget.onTap != null) {
+                            await Future.delayed(
+                              const Duration(milliseconds: 200),
+                            );
+                            widget.onTap!();
+                          } else {
+                            Navigator.of(context).push(
+                              PageRouteBuilder(
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        const MobileFullPlayer(),
+                                transitionsBuilder:
+                                    (
+                                      context,
+                                      animation,
+                                      secondaryAnimation,
+                                      child,
+                                    ) {
+                                      return FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      );
+                                    },
+                                transitionDuration: const Duration(
+                                  milliseconds: 400,
                                 ),
-                                blurRadius: 10 * _pulseController.value,
-                                spreadRadius: 2 * _pulseController.value,
                               ),
-                            ]
-                          : [],
+                            );
+                          }
+                        },
+                        onHorizontalDragEnd: (details) {
+                          if (details.primaryVelocity! > 0) {
+                            manager.previous();
+                          } else if (details.primaryVelocity! < 0) {
+                            manager.next();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: AppColors.themeBorder(mode),
+                              width: 1.5,
+                            ),
+                            boxShadow: isAdo
+                                ? [
+                                    BoxShadow(
+                                      color: AppColors.adoGlow(mode)
+                                          .withOpacity(
+                                            0.6 * _pulseController.value,
+                                          ),
+                                      blurRadius: 10 * _pulseController.value,
+                                      spreadRadius: 2 * _pulseController.value,
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOutCubic,
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder:
+                            (Widget child, Animation<double> animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: animation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                        child: widget.showVisualizer
+                            ? _buildVisualizer(mode)
+                            : _buildSongInfo(song, isPlaying, manager, mode),
+                      ),
                     ),
-                    child: child,
                   ),
-                );
-              },
-              child: widget.showVisualizer
-                  ? _buildVisualizer()
-                  : Row(
-                      children: [
-                        // Carátula Giratoria
-                        RotationTransition(
-                          turns: _controller,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.blue.shade900,
-                                width: 1,
-                              ),
-                            ),
-                            child: ClipOval(
-                              child: song.artwork != null
-                                  ? Image.memory(
-                                      song.artwork!,
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.asset(
-                                      'assets/MG-I-T.png',
-                                      width: 36,
-                                      height: 36,
-                                      fit: BoxFit.cover,
-                                    ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Información (Título y Tiempo)
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                song.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              ValueListenableBuilder<Duration>(
-                                valueListenable: manager.positionNotifier,
-                                builder: (context, position, _) {
-                                  final m = position.inMinutes;
-                                  final s = (position.inSeconds % 60)
-                                      .toString()
-                                      .padLeft(2, '0');
-                                  return Text(
-                                    "$m:$s",
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 10,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Botones
-                        IconButton(
-                          icon: Icon(
-                            isPlaying ? Ionicons.pause : Ionicons.play,
-                          ),
-                          iconSize: 20,
-                          color: Colors.white,
-                          onPressed: manager.togglePlayPause,
-                          padding: EdgeInsets.zero,
-                        ),
-                        IconButton(
-                          icon: const Icon(Ionicons.play_skip_forward),
-                          iconSize: 20,
-                          color: Colors.white,
-                          onPressed: manager.next,
-                          padding: EdgeInsets.zero,
-                        ),
-                      ],
-                    ),
+                ),
+              ),
             );
           },
         );
@@ -217,8 +229,158 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
     );
   }
 
-  Widget _buildVisualizer() {
+  /// Construye la fila de información de la canción y controles básicos
+  Widget _buildSongInfo(
+    LocalSong song,
+    bool isPlaying,
+    AudioPlayerManager manager,
+    AppThemeMode mode,
+  ) {
+    return Row(
+      key: const ValueKey('songInfo'),
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final dx = _isSlideLeft ? 1.0 : -1.0;
+            final isIncoming = child.key == ValueKey(song.id);
+            final offset = isIncoming
+                ? Tween<Offset>(
+                    begin: Offset(dx, 0.0),
+                    end: Offset.zero,
+                  ).animate(animation)
+                : Tween<Offset>(
+                    begin: Offset(-dx, 0.0),
+                    end: Offset.zero,
+                  ).animate(animation);
+
+            return SlideTransition(
+              position: offset,
+              child: FadeTransition(opacity: animation, child: child),
+            );
+          },
+          child: RotationTransition(
+            key: ValueKey(song.id),
+            turns: _controller,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.themeBorder(mode),
+                  width: 1,
+                ),
+              ),
+              child: ClipOval(
+                child: song.artwork != null
+                    ? Image.memory(
+                        song.artwork!,
+                        width: 36,
+                        height: 36,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.asset(
+                        'assets/MG-I-T.png',
+                        width: 36,
+                        height: 36,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final dx = _isSlideLeft ? 1.0 : -1.0;
+              final isIncoming = child.key == ValueKey('text_${song.id}');
+              final offset = isIncoming
+                  ? Tween<Offset>(
+                      begin: Offset(dx, 0.0),
+                      end: Offset.zero,
+                    ).animate(animation)
+                  : Tween<Offset>(
+                      begin: Offset(-dx, 0.0),
+                      end: Offset.zero,
+                    ).animate(animation);
+
+              return SlideTransition(
+                position: offset,
+                child: FadeTransition(opacity: animation, child: child),
+              );
+            },
+            child: Column(
+              key: ValueKey('text_${song.id}'),
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  song.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.textPrimary(mode),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                ValueListenableBuilder<Duration>(
+                  valueListenable: manager.positionNotifier,
+                  builder: (context, position, _) {
+                    final posMs = position.inMilliseconds.toDouble();
+                    return TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      tween: Tween<double>(begin: posMs, end: posMs),
+                      builder: (context, animValue, _) {
+                        final pos = Duration(milliseconds: animValue.toInt());
+                        final m = pos.inMinutes;
+                        final s = (pos.inSeconds % 60).toString().padLeft(
+                          2,
+                          '0',
+                        );
+                        return Text(
+                          "$m:$s",
+                          style: TextStyle(
+                            color: AppColors.textSecondary(mode),
+                            fontSize: 10,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        IconButton(
+          icon: Icon(isPlaying ? Ionicons.pause : Ionicons.play),
+          iconSize: 20,
+          color: AppColors.icon(mode),
+          onPressed: manager.togglePlayPause,
+          padding: EdgeInsets.zero,
+        ),
+        IconButton(
+          icon: const Icon(Ionicons.play_skip_forward),
+          iconSize: 20,
+          color: AppColors.icon(mode),
+          onPressed: manager.next,
+          padding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
+  /// Construye visualizador simple de barras animadas
+  Widget _buildVisualizer(AppThemeMode mode) {
     return SizedBox(
+      key: const ValueKey('visualizer'),
       height: 36,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -227,8 +389,6 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
             animation: _controller,
             builder: (context, child) {
               final t = _controller.value;
-              // Simulación de espectro de audio "Real"
-              // Usamos múltiples ondas sinusoidales a diferentes frecuencias para simular caos/ruido
               final noise =
                   math.sin(t * 40 + index) * math.cos(t * 25 + index * 2) +
                   math.sin(t * 15 + index * 0.5);
@@ -239,7 +399,7 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
                 width: 3,
                 height: height,
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade900,
+                  color: AppColors.visualizerColor(mode),
                   borderRadius: BorderRadius.circular(2),
                 ),
               );

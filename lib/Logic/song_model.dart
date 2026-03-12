@@ -10,6 +10,7 @@ class LocalSong {
   final String artist;
   final String path;
   final Uint8List? artwork;
+  final int? duration;
 
   LocalSong({
     required this.id,
@@ -17,5 +18,6 @@ class LocalSong {
     required this.artist,
     required this.path,
     this.artwork,
+    this.duration,
   });
 }

@@ -17,26 +17,32 @@ class MusicAudioHandler {
 
   MusicAudioHandler._internal();
 
+  /// Salta a la siguiente canción
   Future<void> skipToNext() async {
     await _playerManager.next();
   }
 
+  /// Vuelve a la canción anterior
   Future<void> skipToPrevious() async {
     await _playerManager.previous();
   }
 
+  /// Reanuda la reproducción
   Future<void> play() async {
     await _playerManager.play();
   }
 
+  /// Pausa la reproducción
   Future<void> pause() async {
     await _playerManager.pause();
   }
 
+  /// Detiene la reproducción (pausa)
   Future<void> stop() async {
     await _playerManager.pause();
   }
 
+  /// Busca a una posición específica
   Future<void> seek(Duration position) async {
     await _playerManager.seek(position);
   }

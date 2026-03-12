@@ -36,10 +36,9 @@
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
         android:requestLegacyExternalStorage="true">
-
-        <!-- 🚨 IMPORTANTE: ESTA ES LA ACTIVITY CORRECTA -->
+        
         <activity
-            android:name="com.ryanheise.audioservice.AudioServiceActivity"
+            android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
@@ -92,6 +91,8 @@
                 <action android:name="MG_ACTION_PREV" />
                 <action android:name="MG_ACTION_PLAY_PAUSE" />
                 <action android:name="MG_ACTION_NEXT" />
+                <action android:name="MG_ACTION_FAVORITE" />
+                <action android:name="MG_ACTION_STOP" />
             </intent-filter>
         </receiver>
 

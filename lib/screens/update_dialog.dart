@@ -2,46 +2,56 @@
 // Diálogo de actualización disponible
 
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:mg_music/models/version_model.dart';
+import 'package:mg_music/Logic/version_model.dart';
+import 'package:mg_music/services/theme_service.dart';
 
 /// Diálogo que muestra información de actualización disponible
-class UpdateDialog extends StatelessWidget {
+class UpdateDialog extends StatefulWidget {
   final VersionModel versionData;
   final bool isTv;
 
   const UpdateDialog({super.key, required this.versionData, this.isTv = false});
 
+  @override
+  State<UpdateDialog> createState() => _UpdateDialogState();
+}
+
+class _UpdateDialogState extends State<UpdateDialog>
+    with TickerProviderStateMixin {
+  late final AnimationController _entryController;
+  late final Animation<double> _scaleAnimation;
+  late final Animation<double> _fadeAnimation;
+
+  AnimationController? _glowController;
+
   /// Abre la URL en el navegador
   Future<void> _launchURL() async {
     try {
-      final url = versionData.websiteUrl;
+      final url = widget.versionData.websiteUrl;
       if (kDebugMode) print('Intentando abrir URL: $url');
 
       final uri = Uri.parse(url);
 
-      // Intentar con diferentes modos de lanzamiento
       try {
-        // Primero intenta con inAppBrowserView (navegador incorporado)
         await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
         if (kDebugMode) print('URL lanzada con inAppBrowserView');
       } catch (e) {
         if (kDebugMode) print('Error con inAppBrowserView: $e');
         try {
-          // Si falla, intenta con externalApplication (navegador externo)
           await launchUrl(uri, mode: LaunchMode.externalApplication);
           if (kDebugMode) print('URL lanzada con externalApplication');
         } catch (e2) {
           if (kDebugMode) print('Error con externalApplication: $e2');
           try {
-            // Si todo falla, intenta con platformDefault
             await launchUrl(uri, mode: LaunchMode.platformDefault);
             if (kDebugMode) print('URL lanzada con platformDefault');
           } catch (e3) {
             if (kDebugMode) print('Error con platformDefault: $e3');
-            // Último intento: sin modo específico
             await launchUrl(uri);
             if (kDebugMode) print('URL lanzada sin modo específico');
           }
@@ -52,9 +62,45 @@ class UpdateDialog extends StatelessWidget {
     }
   }
 
+  @override
+  /// Inicializa controladores de animación y pulso crítico
+  void initState() {
+    super.initState();
+
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _scaleAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOutBack,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.linear,
+    );
+    _entryController.forward();
+
+    if (widget.versionData.importance == 'critical') {
+      _glowController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1500),
+      );
+      _glowController?.repeat(reverse: true);
+    }
+  }
+
+  @override
+  /// Libera recursos de animación
+  void dispose() {
+    _entryController.dispose();
+    _glowController?.dispose();
+    super.dispose();
+  }
+
   /// Obtiene el color según la importancia
   Color _getImportanceColor() {
-    switch (versionData.importance) {
+    switch (widget.versionData.importance) {
       case 'critical':
         return Colors.red;
       case 'high':
@@ -68,7 +114,7 @@ class UpdateDialog extends StatelessWidget {
 
   /// Obtiene el ícono según la importancia
   IconData _getImportanceIcon() {
-    switch (versionData.importance) {
+    switch (widget.versionData.importance) {
       case 'critical':
         return Icons.error_outline;
       case 'high':
@@ -82,7 +128,7 @@ class UpdateDialog extends StatelessWidget {
 
   /// Obtiene el nombre en texto según la importancia
   String _getImportanceName() {
-    switch (versionData.importance) {
+    switch (widget.versionData.importance) {
       case 'critical':
         return 'Alta';
       case 'high':
@@ -95,146 +141,261 @@ class UpdateDialog extends StatelessWidget {
   }
 
   @override
+  /// Construye el diálogo de actualización con animaciones y acciones
   Widget build(BuildContext context) {
+    final mode = context.watch<ThemeService>().mode;
     final importanceColor = _getImportanceColor();
     final importanceIcon = _getImportanceIcon();
 
-    return PopScope(
-      canPop: false,
-      child: Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: const Color(0xFF1E1E1E),
-          ),
-          constraints: BoxConstraints(maxWidth: isTv ? 800 : 500),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.all(isTv ? 32.0 : 24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        importanceIcon,
-                        color: importanceColor,
-                        size: isTv ? 32 : 24,
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([
+            if (_glowController != null) _glowController!,
+          ]),
+          builder: (context, _) {
+            List<BoxShadow> shadows = [
+              BoxShadow(
+                color: AppColors.themeBorder(mode).withOpacity(0.4),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ];
+            if (_glowController != null) {
+              final glowValue = _glowController!.value;
+              shadows.add(
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.5 * glowValue),
+                  blurRadius: 30,
+                  spreadRadius: 4,
+                ),
+              );
+            }
+
+            return PopScope(
+              canPop: false,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      constraints: BoxConstraints(
+                        maxWidth: widget.isTv ? 800 : 500,
                       ),
-                      SizedBox(width: isTv ? 16 : 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Nueva versión',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontSize: isTv ? 24 : null,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'v${versionData.version} · ${_getImportanceName()}',
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: importanceColor,
-                                    fontSize: isTv ? 16 : null,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: isTv ? 28 : 20),
-                  Text(
-                    versionData.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: isTv ? 20 : null,
-                    ),
-                  ),
-                  SizedBox(height: isTv ? 20 : 16),
-                  if (versionData.changelog.isNotEmpty)
-                    Container(
-                      padding: EdgeInsets.all(isTv ? 16 : 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2A2A2A),
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.background(mode),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppColors.themeBorder(mode).withOpacity(0.3),
+                            AppColors.background(mode).withOpacity(0.9),
+                          ],
+                          stops: const [0.0, 0.7],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.themeBorder(mode),
+                          width: 2,
+                        ),
+                        boxShadow: shadows,
                       ),
-                      child: Text(
-                        versionData.changelog,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[300],
-                          height: 1.5,
-                          fontSize: isTv ? 16 : null,
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: EdgeInsets.all(widget.isTv ? 32.0 : 24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    importanceIcon,
+                                    color: importanceColor,
+                                    size: widget.isTv ? 32 : 24,
+                                  ),
+                                  SizedBox(width: widget.isTv ? 16 : 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Nueva versión',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: AppColors.textPrimary(
+                                                  mode,
+                                                ),
+                                                fontSize: widget.isTv
+                                                    ? 24
+                                                    : null,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'v${widget.versionData.version} · ${_getImportanceName()}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: importanceColor,
+                                                fontSize: widget.isTv
+                                                    ? 16
+                                                    : null,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: widget.isTv ? 28 : 20),
+                              Text(
+                                widget.versionData.title,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: AppColors.textPrimary(mode),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: widget.isTv ? 20 : null,
+                                    ),
+                              ),
+                              SizedBox(height: widget.isTv ? 20 : 16),
+                              if (widget.versionData.changelog.isNotEmpty)
+                                Container(
+                                  padding: EdgeInsets.all(
+                                    widget.isTv ? 16 : 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface(mode),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: AppColors.themeBorder(
+                                        mode,
+                                      ).withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    widget.versionData.changelog,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary(mode),
+                                          height: 1.5,
+                                          fontSize: widget.isTv ? 16 : null,
+                                        ),
+                                  ),
+                                ),
+                              if (widget.versionData.changelog.isNotEmpty)
+                                SizedBox(height: widget.isTv ? 28 : 20),
+                              SizedBox(height: widget.isTv ? 16 : 8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  if (!widget.versionData.forceUpdate)
+                                    Expanded(
+                                      child: _NeonButton(
+                                        label: 'Ahora no',
+                                        onPressed: () => Navigator.pop(context),
+                                        color: Colors.grey,
+                                        isTv: widget.isTv,
+                                        mode: mode,
+                                      ),
+                                    ),
+                                  if (!widget.versionData.forceUpdate)
+                                    SizedBox(width: widget.isTv ? 16 : 12),
+                                  Expanded(
+                                    child: _NeonButton(
+                                      label: 'Actualizar',
+                                      onPressed: () async {
+                                        await _launchURL();
+                                        if (Navigator.canPop(context)) {
+                                          Navigator.pop(context);
+                                        }
+                                      },
+                                      color: importanceColor,
+                                      isTv: widget.isTv,
+                                      mode: mode,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  if (versionData.changelog.isNotEmpty)
-                    SizedBox(height: isTv ? 28 : 20),
-                  SizedBox(height: isTv ? 16 : 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.grey),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              vertical: isTv ? 16 : 12,
-                            ),
-                          ),
-                          child: Text(
-                            'Ahora no',
-                            style: TextStyle(
-                              color: Colors.grey[300],
-                              fontSize: isTv ? 16 : null,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: isTv ? 16 : 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            await _launchURL();
-                            if (Navigator.canPop(context)) {
-                              Navigator.pop(context);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: importanceColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              vertical: isTv ? 16 : 12,
-                            ),
-                          ),
-                          child: Text(
-                            'Actualizar',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: isTv ? 16 : null,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-                ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón personalizado con estilo neón y degradado
+class _NeonButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+  final Color color;
+  final bool isTv;
+  final AppThemeMode mode;
+
+  const _NeonButton({
+    required this.label,
+    required this.onPressed,
+    required this.color,
+    required this.mode,
+    this.isTv = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.6), AppColors.background(mode)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: color),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.5),
+            blurRadius: 10,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(30),
+          onTap: onPressed,
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: isTv ? 16 : 12),
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: isTv ? 16 : null,
+                ),
               ),
             ),
           ),

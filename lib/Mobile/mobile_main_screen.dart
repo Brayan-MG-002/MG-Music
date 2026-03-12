@@ -1,21 +1,32 @@
 // Copyright © 2026 Brayan Medrano - MG Music
 // Pantalla principal Mobile
 
-import 'dart:typed_data';
+import 'dart:async';
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/Logic/audio_player_manager.dart';
 import 'package:mg_music/Logic/favorites_manager.dart';
 import 'package:mg_music/Logic/playlist_manager.dart';
 import 'package:mg_music/Logic/song_model.dart';
-import 'package:mg_music/Mobile/Home/mobile_favorites_page.dart';
-import 'package:mg_music/Mobile/Home/mobile_home_page.dart';
-import 'package:mg_music/Mobile/Home/mobile_playlists_page.dart';
+import 'package:mg_music/Mobile/Home/favorites/mobile_favorites_page.dart';
+import 'package:mg_music/Mobile/Home/Home/mobile_home_page.dart';
+import 'package:mg_music/Mobile/Home/playlist/mobile_playlists_page.dart';
 import 'package:mg_music/Mobile/Home/Player/mobile_full_player.dart';
-import 'package:mg_music/Mobile/Home/Player/mobile_mini_player.dart';
-import 'package:mg_music/Mobile/Home/mobile_settings_page.dart';
+import 'package:mg_music/Mobile/Home/Settings/mobile_settings_page.dart';
+import 'package:mg_music/services/theme_service.dart';
+import 'package:provider/provider.dart';
+import 'package:mg_music/Mobile/Main/animated_app_bar.dart';
+import 'package:mg_music/Mobile/Main/animated_bottom_nav_bar.dart';
+import 'package:mg_music/Mobile/Main/enums.dart';
+import 'package:mg_music/services/custom_toast_service.dart';
+import 'package:mg_music/services/global_modal_service.dart';
 import 'package:mg_music/services/update_service.dart';
-import 'package:mg_music/screens/update_dialog.dart';
+import 'package:mg_music/Logic/version_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:mg_music/Mobile/Main/landscape_warning_screen.dart';
+import 'package:mg_music/Logic/audio_player_logic/ado_handler.dart';
 
 class MobileMainScreen extends StatefulWidget {
   const MobileMainScreen({super.key});
@@ -33,853 +44,589 @@ class _MobileMainScreenState extends State<MobileMainScreen>
   final _searchFocusNode = FocusNode();
   bool _isFavoritesSelectionMode = false;
 
-  // Key para controlar el Home Page desde el Main Screen
-  final GlobalKey<MobileHomePageState> _homeKey = GlobalKey();
-  // Key para controlar Favoritos
-  final GlobalKey<MobileFavoritesPageState> _favoritesKey = GlobalKey();
-  // Key para controlar Playlists
-  final GlobalKey<MobilePlaylistsPageState> _playlistsKey = GlobalKey();
+  List<LocalSong> _allSongs = [];
+  List<LocalSong> _songs = [];
+  SortType _currentSortType = SortType.patrona;
+  String? _selectedArtist;
 
-  // Caché para la lista de artistas para optimizar el rendimiento
-  List<String>? _cachedArtistList;
+  final GlobalKey<MobileHomePageState> _homeKey = GlobalKey();
+  final GlobalKey<MobileFavoritesPageState> _favoritesKey = GlobalKey();
+  final GlobalKey<MobilePlaylistsPageState> _playlistsKey = GlobalKey();
 
   late final List<Widget> _pages;
 
   @override
+  /// Inicializa servicios, listeners y páginas
   void initState() {
     super.initState();
-    FavoritesManager().init(); // Inicializar Favoritos
-    PlaylistManager().init(); // Inicializar Playlists
-    AudioPlayerManager().init(); // Inicializar AudioPlayer
-    _searchController.addListener(_onSearchChanged);
+    FavoritesManager().init();
+    PlaylistManager().init();
+    AudioPlayerManager().init();
+    _loadSortPreference();
+    _searchController.addListener(_applyFiltersAndSort);
+
+    // MobileHomePage is now built dynamically in _buildCurrentPage to pass the song list.
+    // The _pages list now only contains the other main sections.
     _pages = [
-      MobileHomePage(
-        key: _homeKey,
-        onOpenPlayer: () => setState(() => _showFullPlayer = true),
-      ),
+      // Index 0 is MobileHomePage
       MobilePlaylistsPage(
         key: _playlistsKey,
-        onStateChanged: () {
-          setState(() {});
-        },
+        onStateChanged: () => setState(() {}),
         onOpenPlayer: () => setState(() => _showFullPlayer = true),
       ),
       MobileFavoritesPage(
         key: _favoritesKey,
-        onSelectionModeChanged: (isSelectionMode) {
-          setState(() {
-            _isFavoritesSelectionMode = isSelectionMode;
-          });
-        },
+        onSelectionModeChanged: (isSelectionMode) =>
+            setState(() => _isFavoritesSelectionMode = isSelectionMode),
         onOpenPlayer: () => setState(() => _showFullPlayer = true),
       ),
       const MobileSettingsPage(),
     ];
 
-    // Verificar actualizaciones después de inicializar
     Future.delayed(const Duration(milliseconds: 500), () {
-      _checkForUpdates();
+      if (mounted) _checkForUpdates();
     });
   }
 
+  /// Claves y preferencias de Ado
+  static const String _adoPlaylistName = 'Ado ★';
+  static const String _prefHasAdoSongs = 'has_ado_songs';
+
+  /// Sincroniza la playlist de Ado y ajusta sort/startup según disponibilidad
+  Future<void> _syncAdoPlaylist(List<LocalSong> allSongs) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final adoSongs = allSongs
+        .where((s) => AdoHandler.isAdo(s))
+        .toList();
+
+    await prefs.setBool(_prefHasAdoSongs, adoSongs.isNotEmpty);
+
+    if (!mounted) return;
+
+    if (adoSongs.isEmpty) {
+      final currentSort = prefs.getInt('sort_type') ?? 0;
+      final currentStartup = prefs.getString('startup_mode') ?? 'ado';
+
+      if (currentSort == 0 /* patrona */ ) {
+        await prefs.setInt('sort_type', 1 /* alphabetical */);
+        if (mounted) {
+          setState(() {
+            _currentSortType = SortType.alphabetical;
+            _applyFiltersAndSort();
+          });
+        }
+      }
+      if (currentStartup == 'ado') {
+        await AudioPlayerManager().setStartupMode(
+          AudioPlayerManager.startupLast,
+        );
+        if (mounted) setState(() {});
+      }
+      return;
+    }
+
+    final pm = PlaylistManager();
+    final playlists = pm.playlistsNotifier.value;
+    final isNew = !playlists.contains(_adoPlaylistName);
+
+    if (isNew) {
+      pm.createPlaylist(_adoPlaylistName);
+      for (final song in adoSongs) {
+        pm.addSongToPlaylist(_adoPlaylistName, song);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+
+      GlobalModalService.show(
+        title: '¡Playlist de Ado creada!',
+        icon: Ionicons.musical_notes,
+        primaryColor: Colors.blue.shade900,
+        message:
+            'Encontramos ${adoSongs.length} canciones de Ado en tu biblioteca.\n'
+            'Creamos la playlist «$_adoPlaylistName» automáticamente para ti.',
+        actions: [
+          ModalActionButton(
+            label: 'Entendido',
+            onPressed: () => Navigator.of(
+              GlobalModalService.navigatorKey.currentContext!,
+            ).pop(),
+            color: Colors.grey.shade800,
+          ),
+          ModalActionButton(
+            label: 'Ver Playlist',
+            onPressed: () {
+              Navigator.of(
+                GlobalModalService.navigatorKey.currentContext!,
+              ).pop();
+              setState(() => _selectedIndex = 1);
+            },
+            color: Colors.blue.shade900,
+          ),
+        ],
+      );
+    } else {
+      List<String> existingPaths = pm
+          .getSongsNotifier(_adoPlaylistName)
+          .value
+          .toList();
+      int retries = 0;
+
+      while (existingPaths.isEmpty && retries < 3) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        existingPaths = pm.getSongsNotifier(_adoPlaylistName).value.toList();
+        retries++;
+      }
+
+      final existingPathsSet = existingPaths.toSet();
+      final newSongs = adoSongs
+          .where((s) => !existingPathsSet.contains(s.path))
+          .toList();
+
+      if (newSongs.isNotEmpty) {
+        for (final song in newSongs) {
+          pm.addSongToPlaylist(_adoPlaylistName, song);
+        }
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (!mounted) return;
+
+        CustomToastService.show(
+          context,
+          message:
+              '${newSongs.length} canción${newSongs.length > 1 ? 'es' : ''} nueva${newSongs.length > 1 ? 's' : ''} de Ado agregada${newSongs.length > 1 ? 's' : ''} a «$_adoPlaylistName»',
+          type: ToastType.ado,
+          duration: const Duration(seconds: 5),
+        );
+      }
+      // Si no hay nuevas no se muestra nada
+    }
+  }
+
   @override
+  /// Libera controladores de búsqueda
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
+    _searchController.removeListener(_applyFiltersAndSort);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged() {
-    if (_isSearching) {
-      // Llama a la función de búsqueda en MobileHomePage
-      _homeKey.currentState?.searchSongs(_searchController.text);
+  Future<void> _onItemTapped(int index) async {
+    if (_selectedIndex == index) return;
+
+    if (_selectedIndex == 0) {
+      await _homeKey.currentState?.triggerExitAnimation();
+      await Future.delayed(const Duration(milliseconds: 100)); // Pequeña pausa
     }
+
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
-  /// Verifica si hay actualizaciones disponibles
   Future<void> _checkForUpdates() async {
     if (!mounted) return;
     final updateInfo = await UpdateService.checkForUpdate();
-
     if (updateInfo['hasUpdate'] && mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) =>
-            UpdateDialog(versionData: updateInfo['data'], isTv: false),
+      final version = updateInfo['data'] as VersionModel;
+
+      // Determinar colores e iconos según importancia
+      Color color;
+      IconData icon;
+      String importanceLabel;
+
+      switch (version.importance) {
+        case 'critical':
+          color = Colors.red;
+          icon = Ionicons.alert_circle;
+          importanceLabel = 'Crítica';
+          break;
+        case 'high':
+          color = Colors.orange;
+          icon = Ionicons.warning;
+          importanceLabel = 'Alta';
+          break;
+        case 'medium':
+          color = Colors.amber;
+          icon = Ionicons.information_circle;
+          importanceLabel = 'Media';
+          break;
+        default:
+          color = Colors.blue;
+          icon = Ionicons.refresh_circle;
+          importanceLabel = 'Normal';
+      }
+
+      GlobalModalService.show(
+        title: "Nueva Versión Disponible",
+        icon: icon,
+        primaryColor: color,
+        dismissible: !version.forceUpdate,
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withOpacity(0.5)),
+                ),
+                child: Text(
+                  "v${version.version} • $importanceLabel",
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              version.title,
+              style: TextStyle(
+                color: AppColors.textPrimary(context.read<ThemeService>().mode),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (version.changelog.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Text(
+                  version.changelog,
+                  style: TextStyle(
+                    color: AppColors.textSecondary(
+                      context.read<ThemeService>().mode,
+                    ),
+                    height: 1.5,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          if (!version.forceUpdate)
+            ModalActionButton(
+              label: "Ahora no",
+              onPressed: () => Navigator.of(
+                GlobalModalService.navigatorKey.currentContext!,
+              ).pop(),
+              color: Colors.grey,
+            ),
+          ModalActionButton(
+            label: "Actualizar",
+            onPressed: () {
+              Navigator.of(
+                GlobalModalService.navigatorKey.currentContext!,
+              ).pop();
+              launchUrl(
+                Uri.parse(version.websiteUrl),
+                mode: LaunchMode.externalApplication,
+              );
+            },
+            color: color,
+          ),
+        ],
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Manejar botón atrás para Playlists
-        if (_selectedIndex == 1 &&
-            (_playlistsKey.currentState?.isInsidePlaylist ?? false)) {
-          _playlistsKey.currentState?.goBack();
-          return false;
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        if (orientation == Orientation.landscape) {
+          return const LandscapeWarningScreen();
         }
-        if (_showFullPlayer) {
-          setState(() => _showFullPlayer = false);
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        resizeToAvoidBottomInset: false,
-        extendBody: false, // El contenido respeta el espacio del NavBar
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                // --- App Bar Personalizada ---
-                CustomPaint(
-                  painter: _TopBarPainter(
-                    color: Colors.grey.shade900,
-                    borderColor: Colors.blue.shade900,
-                  ),
-                  child: Container(
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top,
-                      bottom: 5,
-                      left: 10,
-                      right: 10,
+        return WillPopScope(
+          onWillPop: () async {
+            if (_selectedIndex == 1 &&
+                (_playlistsKey.currentState?.isInsidePlaylist ?? false)) {
+              _playlistsKey.currentState?.goBack();
+              return false;
+            }
+            if (_showFullPlayer) {
+              setState(() => _showFullPlayer = false);
+              return false;
+            }
+            if (_selectedIndex != 0) {
+              await _onItemTapped(0);
+              return false;
+            }
+            await _homeKey.currentState?.triggerExitAnimation();
+            return true;
+          },
+          child: Consumer<ThemeService>(
+            builder: (context, themeService, _) {
+              return Scaffold(
+                backgroundColor: Colors
+                    .transparent, // El fondo lo maneja AnimatedThemeSwitcher en root
+                resizeToAvoidBottomInset: false,
+                extendBody: true,
+                body: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        // SOLUCIÓN: Se restaura el AppBar aquí
+                        AnimatedAppBar(
+                          selectedIndex: _selectedIndex,
+                          isSearching: _isSearching,
+                          showFullPlayer: _showFullPlayer,
+                          isFavoritesSelectionMode: _isFavoritesSelectionMode,
+                          searchController: _searchController,
+                          searchFocusNode: _searchFocusNode,
+                          favoritesKey: _favoritesKey,
+                          playlistsKey: _playlistsKey,
+                          onSearchTap: _handleSearchTap,
+                          onSortTap: _handleSortTap,
+                          onArtistFilterTap: _handleArtistFilterTap,
+                          onToggleFullPlayer: () => setState(
+                            () => _showFullPlayer = !_showFullPlayer,
+                          ),
+                        ),
+                        Expanded(
+                          child: PageTransitionSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            transitionBuilder:
+                                (child, primaryAnimation, secondaryAnimation) {
+                                  // Transición compartida suave entre secciones y full player
+                                  return SharedAxisTransition(
+                                    animation: primaryAnimation,
+                                    secondaryAnimation: secondaryAnimation,
+                                    transitionType:
+                                        SharedAxisTransitionType.horizontal,
+                                    fillColor: Colors
+                                        .transparent, // Asegura ver el fondo animado
+                                    child: child,
+                                  );
+                                },
+                            child: _buildCurrentPage(),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      switchInCurve: Curves.easeInOut,
-                      switchOutCurve: Curves.easeInOut,
-                      transitionBuilder:
-                          (Widget child, Animation<double> animation) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                      child: _isSearching
-                          ? Container(
-                              key: const ValueKey('search'),
-                              child: _buildSearchBar(),
-                            )
-                          : Container(
-                              key: const ValueKey('default'),
-                              child: _buildDefaultAppBarContent(),
-                            ),
-                    ),
-                  ),
+                  ],
                 ),
-
-                // --- Contenido de la Página ---
-                Expanded(
-                  child: _showFullPlayer
-                      ? const MobileFullPlayer()
-                      : _pages[_selectedIndex],
+                bottomNavigationBar: AnimatedBottomNavBar(
+                  selectedIndex: _selectedIndex,
+                  isSearching: _isSearching,
+                  onNavItemTap: _handleNavItemTap,
+                  onSearchTap: _handleSearchTap,
                 ),
-              ],
-            ),
-            // --- Indicador de temporizador (superpuesto) ---
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _buildSleepTimerIndicator(),
-            ),
-          ],
-        ),
-
-        // --- Barra de Navegación con Curva ---
-        bottomNavigationBar: Container(
-          color: Colors.transparent,
-          child: CustomPaint(
-            painter: _NavBarPainter(
-              color: Colors.grey.shade900,
-              borderColor: Colors.blue.shade900,
-            ),
-            child: Container(
-              height: 70 + MediaQuery.of(context).padding.bottom,
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).padding.bottom,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: _buildNavItem(
-                      0,
-                      Ionicons.musical_notes_outline,
-                      Ionicons.musical_notes,
-                      'Pistas',
-                    ),
-                  ),
-                  Expanded(
-                    child: _buildNavItem(
-                      1,
-                      Ionicons.list_outline,
-                      Ionicons.list,
-                      'Playlists',
-                    ),
-                  ),
-                  Expanded(child: _buildSearchNavItem()),
-                  Expanded(
-                    child: _buildNavItem(
-                      2,
-                      Ionicons.heart_outline,
-                      Ionicons.heart,
-                      'Favoritos',
-                    ),
-                  ),
-                  Expanded(
-                    child: _buildNavItem(
-                      3,
-                      Ionicons.settings_outline,
-                      Ionicons.settings,
-                      'Ajustes',
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              );
+            },
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildNavItem(
-    int index,
-    IconData iconOff,
-    IconData iconOn,
-    String label,
-  ) {
-    // Un item no está seleccionado si estamos en modo búsqueda
-    final bool isActuallySelected = _selectedIndex == index && !_isSearching;
+  // --- LÓGICA DE NEGOCIO ---
 
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          // Si tocamos un item de la nav bar, salimos del modo búsqueda
-          if (_isSearching) {
-            _isSearching = false;
-            _searchFocusNode.unfocus();
-            _searchController
-                .clear(); // Esto dispara el listener y resetea la lista
-          }
+  Future<void> _handleNavItemTap(int index) async {
+    final previousIndex = _selectedIndex;
+    setState(() {
+      if (_isSearching) {
+        _isSearching = false;
+        _searchFocusNode.unfocus();
+        _searchController.clear();
+      }
+      if (_selectedIndex != index) _selectedIndex = index;
+      if (_showFullPlayer) _showFullPlayer = false;
+    });
 
-          _selectedIndex = index;
+    await Future.delayed(const Duration(milliseconds: 300));
 
-          // Si cambiamos a Favoritos (índice 2), refrescamos el modo de vista
-          if (index == 2 || index == 1) {
-            _favoritesKey.currentState?.refreshViewMode();
-            _playlistsKey.currentState?.refreshViewMode();
-          }
+    if (index == 2 || index == 1) {
+      _favoritesKey.currentState?.refreshViewMode();
+      _playlistsKey.currentState?.refreshViewMode();
+    }
 
-          // No mostrar el reproductor completo al cambiar de pestaña
-          if (_showFullPlayer) {
-            _showFullPlayer = false;
-          }
-        });
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isActuallySelected ? iconOn : iconOff,
-            color: isActuallySelected ? Colors.blue.shade900 : Colors.grey,
-            size: 24,
-          ),
-          if (isActuallySelected)
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.blue.shade900,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchNavItem() {
-    // El botón de búsqueda se considera "seleccionado" si el modo búsqueda está activo
-    final isSelected = _isSearching;
-    return GestureDetector(
-      onTap: _handleSearchTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isSelected ? Ionicons.search : Ionicons.search_outline,
-            color: isSelected ? Colors.blue.shade900 : Colors.grey,
-            size: 24,
-          ),
-          if (isSelected)
-            Text(
-              'Buscar',
-              style: TextStyle(
-                color: Colors.blue.shade900,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-        ],
-      ),
-    );
+    if (index == 0 && previousIndex != 0) {
+      _homeKey.currentState?.triggerEnterAnimation();
+    }
   }
 
   void _handleSearchTap() {
     setState(() {
-      // Si no estamos en la pestaña de Pistas, nos movemos a ella
-      if (_selectedIndex != 0) {
-        _selectedIndex = 0;
-      }
-
+      if (_selectedIndex != 0) _selectedIndex = 0;
       _isSearching = !_isSearching;
-      _showFullPlayer = false; // Cerramos el reproductor si estaba abierto
-
+      _showFullPlayer = false;
       if (_isSearching) {
         _searchFocusNode.requestFocus();
       } else {
         _searchFocusNode.unfocus();
-        _searchController.clear(); // Limpia y resetea la lista
+        _searchController.clear();
       }
     });
   }
 
-  Widget _buildDefaultAppBarContent() {
-    return Row(
-      children: [
-        // Botón Atrás (Solo si estamos DENTRO de una Playlist)
-        if (_selectedIndex == 1 &&
-            (_playlistsKey.currentState?.isInsidePlaylist ?? false))
-          _buildTopBarIcon(Ionicons.arrow_back, () {
-            _playlistsKey.currentState?.goBack();
-          }),
+  // --- MODALES GLOBALES Y LÓGICA DE FILTRADO/ORDENAMIENTO ---
 
-        // --- IZQUIERDA ---
-        // Pistas (0): Ordenar
-        if (_selectedIndex == 0 && !_showFullPlayer)
-          _buildTopBarIcon(Ionicons.swap_vertical, () {
-            _showSortMenu(context);
-          }),
-
-        // Favoritos (2): Reproducir Todo (Solo si no estamos seleccionando)
-        if (_selectedIndex == 2 &&
-            !_showFullPlayer &&
-            !_isFavoritesSelectionMode)
-          _buildTopBarIcon(Ionicons.play_circle, () {
-            _favoritesKey.currentState?.playFavorites();
-          }),
-
-        // Playlists (1): Reproducir Todo (Solo si estamos DENTRO de una playlist)
-        if (_selectedIndex == 1 &&
-            !_showFullPlayer &&
-            (_playlistsKey.currentState?.isInsidePlaylist ?? false))
-          _buildTopBarIcon(Ionicons.play_circle, () {
-            _playlistsKey.currentState?.playCurrentPlaylist();
-          }),
-
-        // --- Mini Reproductor Integrado (Centro) ---
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: MobileMiniPlayer(
-              showVisualizer: _showFullPlayer,
-              onTap: () {
-                setState(() {
-                  _showFullPlayer = !_showFullPlayer;
-                });
-              },
-            ),
-          ),
-        ),
-
-        // --- DERECHA ---
-        // Pistas (0): Artistas
-        if (_selectedIndex == 0 && !_showFullPlayer)
-          _buildTopBarIcon(Ionicons.people, () {
-            _showArtistMenu(context);
-          }),
-
-        // Favoritos (2): Eliminar / Confirmar Eliminación
-        if (_selectedIndex == 2 && !_showFullPlayer)
-          _buildTopBarIcon(
-            _isFavoritesSelectionMode ? Ionicons.trash : Ionicons.trash_outline,
-            () {
-              _favoritesKey.currentState?.handleDeleteAction();
-            },
-            color: _isFavoritesSelectionMode ? Colors.red : Colors.white,
-          ),
-
-        // Playlists (1): Eliminar (Solo si estamos DENTRO de una playlist)
-        if (_selectedIndex == 1 &&
-            !_showFullPlayer &&
-            (_playlistsKey.currentState?.isInsidePlaylist ?? false))
-          _buildTopBarIcon(
-            (_playlistsKey.currentState?.isSelectionMode ?? false)
-                ? Ionicons.trash
-                : Ionicons.trash_outline,
-            () {
-              _playlistsKey.currentState?.handleDeleteAction();
-            },
-            color: (_playlistsKey.currentState?.isSelectionMode ?? false)
-                ? Colors.red
-                : Colors.white,
-          ),
-      ],
-    );
+  Future<void> _loadSortPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSortIndex = prefs.getInt('sort_type') ?? 0;
+    if (mounted) {
+      setState(() {
+        _currentSortType = SortType.values.length > savedSortIndex
+            ? SortType.values[savedSortIndex]
+            : SortType.patrona;
+        if (_allSongs.isNotEmpty) {
+          _applyFiltersAndSort();
+        }
+      });
+    }
   }
 
-  Widget _buildSearchBar() {
-    final playerManager = AudioPlayerManager();
-
-    return Row(
-      children: [
-        // Carátula giratoria
-        ValueListenableBuilder<LocalSong?>(
-          valueListenable: playerManager.currentSongNotifier,
-          builder: (context, song, _) {
-            if (song == null) return const SizedBox(width: 40);
-            return ValueListenableBuilder<bool>(
-              valueListenable: playerManager.isPlayingNotifier,
-              builder: (context, isPlaying, _) {
-                return _SearchRotatingArtwork(
-                  artwork: song.artwork,
-                  isPlaying: isPlaying,
-                  isAdo: song.artist.toLowerCase().contains('ado'),
-                );
-              },
-            );
-          },
-        ),
-        const SizedBox(width: 8),
-        // Campo de búsqueda
-        Expanded(
-          child: TextField(
-            controller: _searchController,
-            focusNode: _searchFocusNode,
-            autofocus: true,
-            style: const TextStyle(color: Colors.white),
-            cursorColor: Colors.blue.shade300,
-            decoration: InputDecoration(
-              hintText: 'Buscar canciones, artistas...',
-              hintStyle: TextStyle(color: Colors.grey.shade400),
-              border: InputBorder.none,
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(
-                        Ionicons.close_circle,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () => _searchController.clear(),
-                      splashRadius: 20,
-                    )
-                  : null,
-            ),
-          ),
-        ),
-        // Botón para cerrar la búsqueda
-        IconButton(
-          icon: const Icon(Ionicons.close, color: Colors.white),
-          onPressed: _handleSearchTap, // Reutilizamos para cerrar
-          splashRadius: 20,
-        ),
-      ],
+  /// Abre el selector de ordenamiento
+  void _handleSortTap() async {
+    final selected = await GlobalModalService.showSelectionList<SortType>(
+      title: "Ordenar por",
+      icon: Ionicons.swap_vertical,
+      items: SortType.values
+          .where(
+            (st) =>
+                st != SortType.patrona ||
+                _allSongs.any((s) => AdoHandler.isAdo(s)),
+          )
+          .toList(),
+      labelBuilder: (item) {
+        switch (item) {
+          case SortType.patrona:
+            return 'Ado (Por defecto)';
+          case SortType.alphabetical:
+            return 'Alfabético (A-Z)';
+          case SortType.inverse:
+            return 'Inverso (Z-A)';
+        }
+      },
+      selectedItem: _currentSortType,
     );
+
+    if (selected != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('sort_type', selected.index);
+      setState(() {
+        _currentSortType = selected;
+        _applyFiltersAndSort();
+      });
+    }
   }
 
-  Widget _buildTopBarIcon(
-    IconData icon,
-    VoidCallback onTap, {
-    Color color = Colors.white,
-  }) {
-    return IconButton(
-      icon: Icon(icon, color: color),
-      onPressed: onTap,
-      splashRadius: 20,
+  /// Abre el selector de artistas
+  void _handleArtistFilterTap() async {
+    final Set<String> uniqueArtists = _allSongs.map((s) => s.artist).toSet();
+    final List<String> artistList = uniqueArtists.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    artistList.insert(0, "Todos");
+
+    final selected = await GlobalModalService.showSelectionList<String>(
+      title: "Filtrar por Artista",
+      icon: Ionicons.people,
+      items: artistList,
+      labelBuilder: (item) => item,
+      selectedItem: _selectedArtist ?? "Todos",
     );
+
+    if (selected != null) {
+      setState(() {
+        _selectedArtist = (selected == "Todos") ? null : selected;
+        _applyFiltersAndSort();
+      });
+    }
   }
 
-  // --- Menús Personalizados ---
+  /// Aplica búsqueda, filtro de artista y ordenamiento sobre la lista maestra
+  void _applyFiltersAndSort() {
+    List<LocalSong> tempSongs = List.from(_allSongs);
 
-  void _showSortMenu(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey.shade900,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-          side: BorderSide(color: Colors.blue.shade900, width: 2),
-        ),
-        title: const Text(
-          'Ordenar por',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildMenuOption(Ionicons.star, 'La Patrona (Ado primero)', () {
-              _homeKey.currentState?.sortLaPatrona();
-              Navigator.pop(context);
-            }),
-            _buildMenuOption(Ionicons.text, 'Alfabético (A-Z)', () {
-              _homeKey.currentState?.sortAlphabetical(true);
-              Navigator.pop(context);
-            }),
-            _buildMenuOption(Ionicons.swap_vertical, 'Inverso (Z-A)', () {
-              _homeKey.currentState?.sortAlphabetical(false);
-              Navigator.pop(context);
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showArtistMenu(BuildContext context) {
-    // Usar la lista de artistas en caché si está disponible para evitar recálculos.
-    if (_cachedArtistList == null) {
-      // Obtener canciones del estado del Home
-      final allSongs = _homeKey.currentState?.allSongs ?? [];
-
-      // Extraer y limpiar artistas (separando por comas)
-      final artists = allSongs
-          .expand((s) => s.artist.split(',').map((a) => a.trim()))
-          .where((a) => a.isNotEmpty)
-          .toSet()
-          .toList();
-      artists.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      _cachedArtistList = artists;
+    final searchQuery = _searchController.text.toLowerCase();
+    if (searchQuery.isNotEmpty) {
+      tempSongs = tempSongs.where((song) {
+        return song.title.toLowerCase().contains(searchQuery) ||
+            song.artist.toLowerCase().contains(searchQuery);
+      }).toList();
     }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey.shade900,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-          side: BorderSide(color: Colors.blue.shade900, width: 2),
-        ),
-        title: const Text(
-          'Seleccionar Artista',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              _buildMenuOption(Ionicons.people, 'Todos los artistas', () {
-                _homeKey.currentState?.filterByArtist(null);
-                Navigator.pop(context);
-              }),
-              ...(_cachedArtistList ?? []).map(
-                (artist) => _buildMenuOption(Ionicons.person, artist, () {
-                  _homeKey.currentState?.filterByArtist(artist);
-                  Navigator.pop(context);
-                }),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    if (_selectedArtist != null) {
+      tempSongs = tempSongs.where((s) => s.artist == _selectedArtist).toList();
+    }
+
+    switch (_currentSortType) {
+      case SortType.alphabetical:
+        tempSongs.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+        break;
+      case SortType.inverse:
+        tempSongs.sort(
+          (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
+        break;
+      case SortType.patrona:
+      default:
+        tempSongs.sort((a, b) {
+          final aIsAdo = AdoHandler.isAdo(a);
+          final bIsAdo = AdoHandler.isAdo(b);
+          if (aIsAdo && !bIsAdo) return -1;
+          if (!aIsAdo && bIsAdo) return 1;
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
+        break;
+    }
+
+    setState(() {
+      _songs = tempSongs;
+    });
+
+    // No se actualiza la lista interna del reproductor aquí
   }
+}
 
-  Widget _buildSleepTimerIndicator() {
-    return ValueListenableBuilder<DateTime?>(
-      valueListenable: AudioPlayerManager().sleepEndTimeNotifier,
-      builder: (context, endTime, _) {
-        if (endTime == null) return const SizedBox.shrink();
+extension on _MobileMainScreenState {
+  /// Construye la página actual o el full player
+  Widget _buildCurrentPage() {
+    if (_showFullPlayer) {
+      return const MobileFullPlayer(key: ValueKey('full_player'));
+    }
 
-        return StreamBuilder(
-          stream: Stream.periodic(const Duration(seconds: 1)),
-          builder: (context, snapshot) {
-            final remaining = endTime.difference(DateTime.now());
-            if (remaining.isNegative) {
-              return const SizedBox.shrink();
+    if (_selectedIndex == 0) {
+      return MobileHomePage(
+        key: _homeKey,
+        songs: _songs,
+        onSongsLoaded: (allSongs) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _allSongs = allSongs;
+                _applyFiltersAndSort();
+              });
+              AudioPlayerManager().updatePlaylist(_songs);
+              AudioPlayerManager().executeStartupBehavior(allSongs);
+
+              _syncAdoPlaylist(allSongs);
             }
-
-            final timeStr =
-                '${remaining.inMinutes}:${(remaining.inSeconds % 60).toString().padLeft(2, '0')}';
-
-            // El Center alinea el indicador horizontalmente. El Positioned en el body
-            // lo coloca abajo, y el margin en el Container le da espacio sobre el NavBar.
-            return Center(
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade900.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.blue.shade900.withOpacity(0.5),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Ionicons.moon, size: 14, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Apagado en $timeStr',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => AudioPlayerManager().setSleepTimer(0),
-                      child: Icon(
-                        Ionicons.close_circle,
-                        size: 16,
-                        color: Colors.grey.shade400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildMenuOption(IconData icon, String text, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.blue.shade900),
-      title: Text(text, style: const TextStyle(color: Colors.white)),
-      onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      hoverColor: Colors.blue.shade900.withOpacity(0.2),
-    );
-  }
-}
-
-/// Widget para la carátula giratoria en la barra de búsqueda
-class _SearchRotatingArtwork extends StatefulWidget {
-  final Uint8List? artwork;
-  final bool isPlaying;
-  final bool isAdo;
-
-  const _SearchRotatingArtwork({
-    required this.artwork,
-    required this.isPlaying,
-    required this.isAdo,
-  });
-
-  @override
-  State<_SearchRotatingArtwork> createState() => _SearchRotatingArtworkState();
-}
-
-class _SearchRotatingArtworkState extends State<_SearchRotatingArtwork>
-    with TickerProviderStateMixin {
-  late final AnimationController _rotationController;
-  late final AnimationController _glowController;
-
-  @override
-  void initState() {
-    super.initState();
-    _rotationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    );
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-
-    _updateAnimations();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SearchRotatingArtwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isPlaying != oldWidget.isPlaying ||
-        widget.isAdo != oldWidget.isAdo) {
-      _updateAnimations();
+          });
+        },
+        onOpenPlayer: () => setState(() => _showFullPlayer = true),
+      );
     }
-  }
 
-  void _updateAnimations() {
-    if (widget.isPlaying) {
-      _rotationController.repeat();
-    } else {
-      _rotationController.stop();
-    }
-    if (widget.isAdo) {
-      _glowController.repeat(reverse: true);
-    } else {
-      _glowController.stop();
-      _glowController.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _rotationController.dispose();
-    _glowController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _glowController,
-      builder: (context, child) {
-        final glowColor = widget.isAdo
-            ? Colors.blue.shade900.withOpacity(
-                0.3 + (_glowController.value * 0.4),
-              )
-            : Colors.transparent;
-
-        return Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: glowColor, blurRadius: 8, spreadRadius: 2),
-            ],
-          ),
-          child: RotationTransition(
-            turns: _rotationController,
-            child: ClipOval(
-              child: widget.artwork != null
-                  ? Image.memory(
-                      widget.artwork!,
-                      fit: BoxFit.cover,
-                      cacheWidth: 120,
-                      cacheHeight: 120,
-                    )
-                  : Image.asset('assets/MG-I-T.png'),
-            ),
-          ),
-        );
-      },
+    return KeyedSubtree(
+      key: ValueKey('page_$_selectedIndex'),
+      child: _pages[_selectedIndex - 1], // Ajusta el índice
     );
   }
-}
-
-class _NavBarPainter extends CustomPainter {
-  final Color color;
-  final Color borderColor;
-
-  _NavBarPainter({required this.color, required this.borderColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    const double borderRadius = 30.0;
-
-    path.moveTo(0, borderRadius);
-    path.quadraticBezierTo(0, 0, borderRadius, 0);
-
-    // Línea recta superior (sin notch)
-    path.lineTo(size.width - borderRadius, 0);
-    path.quadraticBezierTo(size.width, 0, size.width, borderRadius);
-
-    // Extender hacia abajo para asegurar que cubra el fondo (safe area)
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-
-    // Dibujar fondo
-    canvas.drawPath(path, paint);
-
-    // Dibujar borde (solo la parte superior)
-    final borderPath = Path();
-    borderPath.moveTo(0, borderRadius);
-    borderPath.quadraticBezierTo(0, 0, borderRadius, 0);
-    borderPath.lineTo(size.width - borderRadius, 0);
-    borderPath.quadraticBezierTo(size.width, 0, size.width, borderRadius);
-
-    canvas.drawPath(borderPath, borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _TopBarPainter extends CustomPainter {
-  final Color color;
-  final Color borderColor;
-
-  _TopBarPainter({required this.color, required this.borderColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    const double radius = 20.0;
-    final path = Path();
-
-    // Dibujar forma con esquinas inferiores redondeadas
-    path.moveTo(0, 0);
-    path.lineTo(size.width, 0);
-    path.lineTo(size.width, size.height - radius);
-    path.quadraticBezierTo(
-      size.width,
-      size.height,
-      size.width - radius,
-      size.height,
-    );
-    path.lineTo(radius, size.height);
-    path.quadraticBezierTo(0, size.height, 0, size.height - radius);
-    path.close();
-
-    canvas.drawPath(path, paint);
-
-    // Dibujar solo el borde inferior curvo
-    final borderPath = Path();
-    borderPath.moveTo(0, size.height - radius);
-    borderPath.quadraticBezierTo(0, size.height, radius, size.height);
-    borderPath.lineTo(size.width - radius, size.height);
-    borderPath.quadraticBezierTo(
-      size.width,
-      size.height,
-      size.width,
-      size.height - radius,
-    );
-
-    canvas.drawPath(borderPath, borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

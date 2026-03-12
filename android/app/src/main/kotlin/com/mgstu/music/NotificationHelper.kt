@@ -6,18 +6,29 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
-import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 
 object NotificationHelper {
-    private const val CHANNEL_ID = "mg_music_custom_channel"
-    private const val NOTIF_ID = 1001
+    private const val CHANNEL_ID = "com.mgstudios.mgmusic.audio"
+    private const val NOTIF_ID = 1121
     private const val TAG = "NotificationHelper"
 
-    fun showNotification(context: Context, title: String, artist: String, artPath: String?, isPlaying: Boolean) {
+    /** Muestra o actualiza la notificación de reproducción con acciones compactas */
+    fun showNotification(
+        context: Context,
+        title: String,
+        artist: String,
+        artPath: String?,
+        isPlaying: Boolean,
+        isFavorite: Boolean,
+        isAdo: Boolean,
+        showPrevious: Boolean,
+        showNext: Boolean
+    ) {
         try {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -26,29 +37,8 @@ object NotificationHelper {
             }
 
             val pkg = context.packageName
-            Log.d(TAG, "Creando notificación personalizada para: $title - $artist")
-
-            val remote = RemoteViews(pkg, R.layout.notification_custom)
-            remote.setTextViewText(R.id.notification_title, title)
-            remote.setTextViewText(R.id.notification_artist, artist)
-
-            // Art
-            if (artPath != null) {
-                try {
-                    val uri = android.net.Uri.parse(artPath)
-                    val bmp = decodeSampledBitmapFromUri(context, uri, 256, 256)
-                    if (bmp != null) {
-                        remote.setImageViewBitmap(R.id.notification_art, bmp)
-                    } else {
-                        remote.setImageViewResource(R.id.notification_art, R.mipmap.ic_launcher)
-                    }
-                } catch (e: Throwable) {
-                    Log.e(TAG, "Error seguro cargando artwork: ${e.message}")
-                    remote.setImageViewResource(R.id.notification_art, R.mipmap.ic_launcher)
-                }
-            } else {
-                remote.setImageViewResource(R.id.notification_art, R.mipmap.ic_launcher)
-            }
+            Log.d(TAG, "Creando notificación nativa para: $title - $artist")
+            val artwork = loadArtwork(context, artPath)
 
             val prevIntent = Intent(context, NotificationReceiver::class.java).apply {
                 action = "MG_ACTION_PREV"
@@ -62,6 +52,14 @@ object NotificationHelper {
                 action = "MG_ACTION_NEXT"
                 setPackage(pkg)
             }
+            val favoriteIntent = Intent(context, NotificationReceiver::class.java).apply {
+                action = "MG_ACTION_FAVORITE"
+                setPackage(pkg)
+            }
+            val stopIntent = Intent(context, NotificationReceiver::class.java).apply {
+                action = "MG_ACTION_STOP"
+                setPackage(pkg)
+            }
 
             val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -72,22 +70,73 @@ object NotificationHelper {
             val prev = PendingIntent.getBroadcast(context, 1, prevIntent, flags)
             val play = PendingIntent.getBroadcast(context, 2, playIntent, flags)
             val next = PendingIntent.getBroadcast(context, 3, nextIntent, flags)
+            val favorite = PendingIntent.getBroadcast(context, 4, favoriteIntent, flags)
+            val stop = PendingIntent.getBroadcast(context, 5, stopIntent, flags)
 
-            remote.setOnClickPendingIntent(R.id.btn_prev, prev)
-            remote.setOnClickPendingIntent(R.id.btn_play, play)
-            remote.setOnClickPendingIntent(R.id.btn_next, next)
-
+            val stopIcon = R.drawable.ic_close_white_24dp
             val playIcon = if (isPlaying) R.drawable.ic_pause_white_24dp else R.drawable.ic_play_arrow_white_24dp
-            remote.setImageViewResource(R.id.btn_play, playIcon)
+            val favoriteIcon = if (isFavorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
 
-            Log.d(TAG, "Botones configurados: prev, play, next")
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
+            val contentIntent = launchIntent?.let {
+                PendingIntent.getActivity(context, 100, it, flags)
+            }
 
-            val notification: Notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_music)
-                .setCustomContentView(remote)
+                .setContentTitle(title)
+                .setContentText(artist)
                 .setOnlyAlertOnce(true)
-                .setOngoing(true)
-                .build()
+                .setOngoing(isPlaying)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+
+            if (contentIntent != null) {
+                builder.setContentIntent(contentIntent)
+            }
+            if (artwork != null) {
+                builder.setLargeIcon(artwork)
+            }
+
+            val compactActionIndices = mutableListOf<Int>()
+            var actionIndex = 0
+
+            // 0: STOP (X)
+            builder.addAction(stopIcon, "Cerrar", stop)
+            compactActionIndices.add(actionIndex)
+            actionIndex++
+
+            // 1: PREV
+            if (showPrevious) {
+                builder.addAction(R.drawable.ic_skip_previous_white_24dp, "Anterior", prev)
+                compactActionIndices.add(actionIndex)
+                actionIndex++
+            }
+
+            // 2: PLAY/PAUSE
+            builder.addAction(playIcon, if (isPlaying) "Pausar" else "Reproducir", play)
+            compactActionIndices.add(actionIndex)
+            actionIndex++
+
+            // 3: NEXT
+            if (showNext) {
+                builder.addAction(R.drawable.ic_skip_next_white_24dp, "Siguiente", next)
+                compactActionIndices.add(actionIndex)
+                actionIndex++
+            }
+
+            // 4: FAVORITE (ESTRELLA/HEART)
+            builder.addAction(favoriteIcon, if (isFavorite) "Quitar favorito" else "Favorito", favorite)
+            actionIndex++
+
+            val compact = compactActionIndices.toIntArray()
+            val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
+            if (compact.isNotEmpty()) {
+                mediaStyle.setShowActionsInCompactView(*compact)
+            }
+            builder.setStyle(mediaStyle)
+
+            val notification: Notification = builder.build()
 
             nm.notify(NOTIF_ID, notification)
         } catch (e: Throwable) {
@@ -95,6 +144,7 @@ object NotificationHelper {
         }
     }
 
+    /** Oculta la notificación activa del reproductor */
     fun hide(context: Context) {
         try {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -106,12 +156,24 @@ object NotificationHelper {
     }
 
 
-    private fun decodeSampledBitmapFromUri(context: Context, uri: android.net.Uri, reqWidth: Int, reqHeight: Int): android.graphics.Bitmap? {
+    /** Carga la carátula desde un URI si está disponible */
+    private fun loadArtwork(context: Context, artPath: String?): Bitmap? {
+        if (artPath == null) return null
+        return try {
+            val uri = android.net.Uri.parse(artPath)
+            decodeSampledBitmapFromUri(context, uri, 256, 256)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /** Decodifica un bitmap reducido para evitar uso excesivo de memoria */
+    private fun decodeSampledBitmapFromUri(context: Context, uri: android.net.Uri, reqWidth: Int, reqHeight: Int): Bitmap? {
         try {
             var input = context.contentResolver.openInputStream(uri) ?: return null
             val options = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
-                inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 // Reduce memoria al 50%
+                inPreferredConfig = Bitmap.Config.RGB_565
             }
             BitmapFactory.decodeStream(input, null, options)
             input.close()
@@ -119,7 +181,7 @@ object NotificationHelper {
             options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
 
             options.inJustDecodeBounds = false
-            options.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+            options.inPreferredConfig = Bitmap.Config.RGB_565
             input = context.contentResolver.openInputStream(uri) ?: return null
             val bmp = BitmapFactory.decodeStream(input, null, options)
             input.close()
@@ -129,6 +191,7 @@ object NotificationHelper {
         }
     }
 
+    /** Calcula el factor de muestreo ideal según dimensiones requeridas */
     private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
         val (height: Int, width: Int) = options.run { outHeight to outWidth }
         var inSampleSize = 1

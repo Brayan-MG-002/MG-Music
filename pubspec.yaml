@@ -5,7 +5,7 @@ description: "MG Music, un reproductor musical fan-made inspirado en Ado."
 # Evita que el paquete se publique accidentalmente en pub.dev.
 publish_to: 'none'
 # Versión de la aplicación.
-version: 1.0.1+2
+version: 1.1.0+3
 
 # Entorno de desarrollo y versión de SDK de Dart.
 environment:
@@ -15,7 +15,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
+
   collection: ^1.17.0
   device_info_plus: ^12.3.0
   animations: ^2.0.11
@@ -51,13 +51,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/MG-I.png
     - assets/MG-I-T.png
-    - assets/MG-I-T-O.png
-    - assets/MG-I-C.png
-    - assets/MG Studios/MG-S-L.png
-    - assets/MG Studios/MG-S-L-T.png
-    - assets/MG Studios/MG-S-L-T-C.png
-    - assets/MG Studios/MG-S-L-C.png
     - assets/MG Studios/MG-D.png
-    - assets/MG-B.png
+

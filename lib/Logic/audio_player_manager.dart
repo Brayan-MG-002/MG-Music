@@ -1,59 +1,55 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Este archivo gestiona toda la lógica de reproducción de audio
+// Gestor centralizado de reproducción — v2 con autoavance correcto
 
 import 'dart:async';
-import 'dart:math';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mg_music/Logic/song_model.dart';
+import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/material.dart'; // For SnackBar & Dialogs
-import 'package:url_launcher/url_launcher.dart';
-import 'package:mg_music/notification_channel.dart';
-import 'package:mg_music/main.dart'; // Para navigatorKey
+import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:mg_music/Logic/audio_player_logic/ado_handler.dart';
+import 'package:mg_music/Logic/audio_player_logic/playback_handler.dart';
+import 'package:mg_music/Logic/audio_player_logic/playlist_handler.dart';
+import 'package:mg_music/Logic/audio_player_logic/audio_handler.dart';
+import 'package:mg_music/Logic/audio_player_logic/state_manager.dart';
+import 'package:mg_music/Logic/song_model.dart';
+import 'package:mg_music/services/global_modal_service.dart';
 
-/// Gestor centralizado de reproducción de audio con soporte para playlists,
-/// shuffle, repeat, sleep timer y preferencias de usuario
 class AudioPlayerManager with WidgetsBindingObserver {
   static final AudioPlayerManager _instance = AudioPlayerManager._internal();
   factory AudioPlayerManager() => _instance;
-  AudioPlayerManager._internal() {
-    WidgetsBinding.instance.addObserver(this);
-  }
 
-  final AudioPlayer _player = AudioPlayer();
-  Timer? _sleepTimer;
-  double _originalVolume = 1.0;
+  final AudioPlayer _player = AdoHandler.buildPlayer();
+  late final PlaybackHandler _playbackHandler;
+  late final PlaylistHandler _playlistHandler;
+  late final StateManager _stateManager;
+  late final AdoHandler _adoHandler;
+  MyAudioHandler? _audioHandler;
 
-  // Constantes de configuración
-  static const String _prefStartupMode = 'startup_mode';
-  static const String startupAdo = 'ado';
-  static const String startupLast = 'last';
-  static const String _adoArtistName = 'Ado';
-  static const double _adoVolumeBoost = 1.2;
+  bool _isInitialized = false;
 
-  // Estado de reproducción y playlists
-  List<LocalSong> _playlist = [];
-  List<LocalSong> _shuffledPlaylist = [];
-  final List<LocalSong> _playNextQueue = [];
-  LocalSong? _currentPlayingSong;
+  /// true mientras haya una canción activa (protege la lista interna de
+  /// ser sobrescrita por cambios de filtro/orden del Home).
+  bool _playlistLocked = false;
 
-  int _currentIndex = -1;
+  /// Bloqueo anti-concurrencia para eventos de terminación nativa
+  bool _isHandlingCompletion = false;
+
+  final Queue<LocalSong> _nextQueue = Queue<LocalSong>();
+
   DateTime _lastSaveTime = DateTime.now();
+
+  // Anti-pasmo para hardware decoders muertos
+  Timer? _watchdogTimer;
+  Duration _lastWatchdogPos = Duration.zero;
+  int _watchdogStallCount = 0;
   List<LocalSong>? _cachedSongs;
 
-  bool _isShuffleMode = false;
-  bool _playingFromPlayNext = false;
-  bool _isPlayingSingleSource = false;
-  bool _isInitialized = false;
-  bool _isManualSkip = false;
-  bool _hasStartupExecuted = false;
+  // Constantes para compatibilidad con UI existente
+  static const String startupAdo = StateManager.startupAdo;
+  static const String startupLast = StateManager.startupLast;
 
-  int? _resumeMainIndex;
-
-  // Notificadores para la interfaz
+  // ── Notificadores para la interfaz ────────────────────────────────────────
   final ValueNotifier<LocalSong?> currentSongNotifier = ValueNotifier(null);
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier(false);
   final ValueNotifier<bool> isShuffleModeNotifier = ValueNotifier(false);
@@ -63,868 +59,557 @@ class AudioPlayerManager with WidgetsBindingObserver {
   final ValueNotifier<List<LocalSong>> activePlaylistNotifier = ValueNotifier(
     [],
   );
-  final ValueNotifier<String> startupModeNotifier = ValueNotifier(startupAdo);
+  final ValueNotifier<String> startupModeNotifier = ValueNotifier(
+    StateManager.startupAdo,
+  );
   final ValueNotifier<bool> showVisualizerNotifier = ValueNotifier(true);
   final ValueNotifier<int?> sleepTimerNotifier = ValueNotifier(null);
   final ValueNotifier<DateTime?> sleepEndTimeNotifier = ValueNotifier(null);
   final ValueNotifier<bool> isRestoringNotifier = ValueNotifier(false);
+  // ── AdoBoost ──────────────────────────────────────────────────────────────
+  final ValueNotifier<bool> adoBoostEnabledNotifier = ValueNotifier(true);
+  final ValueNotifier<double> adoBoostLevelNotifier = ValueNotifier(
+    AdoHandler.defaultBoostLevel,
+  );
 
-  // Getters públicos
-  List<LocalSong> get playlist =>
-      _isShuffleMode ? _shuffledPlaylist : _playlist;
-  int get currentIndex => _currentIndex;
+  // ── Getters ───────────────────────────────────────────────────────────────
+  List<LocalSong> get playlist => _playlistHandler.activePlaylist;
+  int get currentIndex => _playlistHandler.currentIndex;
   List<LocalSong> get cachedSongs => _cachedSongs ?? [];
+  AudioPlayer get player => _player;
 
-  /// Inicializa los listeners del reproductor y carga configuraciones guardadas
+  AudioPlayerManager._internal() {
+    WidgetsBinding.instance.addObserver(this);
+    _playbackHandler = PlaybackHandler(_player);
+    _playlistHandler = PlaylistHandler();
+    _stateManager = StateManager();
+    _adoHandler = AdoHandler();
+  }
+
+  /// Establece el manejador de metadatos/acciones del sistema
+  void setAudioHandler(MyAudioHandler handler) {
+    _audioHandler = handler;
+  }
+
+  /// Inicializa preferencias, listeners y watchdog
   Future<void> init() async {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Monitor de estado del reproductor
+    await _stateManager.loadPreferences();
+    startupModeNotifier.value = _stateManager.startupMode;
+    showVisualizerNotifier.value = _stateManager.showVisualizer;
+    isShuffleModeNotifier.value = _playlistHandler.isShuffleMode;
+    loopModeNotifier.value = _player.loopMode;
+
+    adoBoostEnabledNotifier.value = await AdoHandler.getBoostEnabled();
+    adoBoostLevelNotifier.value = await AdoHandler.getBoostLevel();
+
     _player.playerStateStream.listen((state) {
       isPlayingNotifier.value = state.playing;
+
+      if (state.processingState == ProcessingState.completed) {
+        if (!_isHandlingCompletion) unawaited(_handleSongCompleted());
+      } else if (!state.playing &&
+          state.processingState == ProcessingState.ready) {
+        final durMs = durationNotifier.value.inMilliseconds;
+        final posMs = positionNotifier.value.inMilliseconds;
+        if (durMs > 0 && posMs > 0 && posMs >= durMs - 1000) {
+          if (!_isHandlingCompletion) {
+            unawaited(_handleSongCompleted());
+          }
+        }
+      }
+
       unawaited(_updateNotification());
     });
 
-    // Monitor de posición de reproducción
+    _watchdogTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+      final isPlaying = isPlayingNotifier.value;
+      if (isPlaying && !_isHandlingCompletion) {
+        final currentPos = positionNotifier.value;
+        final durMs = durationNotifier.value.inMilliseconds;
+
+        if (currentPos == _lastWatchdogPos) {
+          _watchdogStallCount++;
+          if (_watchdogStallCount >= 2 &&
+              durMs > 0 &&
+              currentPos.inMilliseconds >= durMs - 1500) {
+            _watchdogStallCount = 0;
+            unawaited(_handleSongCompleted());
+          }
+        } else {
+          _watchdogStallCount = 0;
+          _lastWatchdogPos = currentPos;
+        }
+      } else {
+        _watchdogStallCount = 0;
+      }
+    });
+
     _player.positionStream.listen((pos) {
       positionNotifier.value = pos;
       _throttleSavePosition(pos);
+
+      final durMs = durationNotifier.value.inMilliseconds;
+      final posMs = pos.inMilliseconds;
+      if (durMs > 0 && posMs > 0 && posMs >= durMs - 400) {
+        if (!_isHandlingCompletion) {
+          unawaited(_handleSongCompleted());
+        }
+      }
     });
 
-    // Monitor de índice actual
-    _player.sequenceStateStream.listen((state) async {
-      if (state?.currentSource?.tag is! MediaItem) return;
-
-      final mediaItem = state!.currentSource!.tag as MediaItem;
-      final songId = int.tryParse(mediaItem.id);
-      if (songId == null) return;
-
-      // Evitar re-procesamiento si la canción no ha cambiado
-      if (songId == _currentPlayingSong?.id) return;
-
-      // Determinar si el cambio fue manual (next/prev) o automático (fin de canción)
-      final bool wasManualSkip = _isManualSkip;
-      if (_isManualSkip) {
-        _isManualSkip = false; // Consumir el flag
-      }
-
-      // Si el cambio fue automático y hay una cola "reproducir después",
-      // debemos anular la selección del reproductor.
-      if (!wasManualSkip && _playNextQueue.isNotEmpty) {
-        await _playNextQueueNext(); // Esto reproducirá la canción correcta
-        return; // Salimos para evitar procesar la canción incorrecta
-      }
-
-      // Si llegamos aquí, la nueva canción es la correcta. Actualizamos el estado.
-      await _updateInternalStateToSong(songId);
-    });
-
-    // Monitor de duración
     _player.durationStream.listen((dur) {
       durationNotifier.value = dur ?? Duration.zero;
     });
-
-    // Cargar preferencias guardadas
-    final prefs = await SharedPreferences.getInstance();
-    startupModeNotifier.value = prefs.getString(_prefStartupMode) ?? startupAdo;
-    showVisualizerNotifier.value = prefs.getBool('show_visualizer') ?? true;
   }
 
-  /// Aplica boost de volumen para canciones del artista Ado
-  Future<void> _applyAdoVolumeBoost(LocalSong song) async {
-    try {
-      _originalVolume = _player.volume;
-      if (song.artist.toLowerCase().contains(_adoArtistName.toLowerCase())) {
-        final boostedVolume = (_originalVolume * _adoVolumeBoost).clamp(
-          0.0,
-          1.0,
-        );
-        await _player.setVolume(boostedVolume);
-      }
-    } catch (e) {}
-  }
+  /// Reproduce una canción y bloquea la lista activa
+  Future<void> playSong(LocalSong song, [List<LocalSong>? contextList]) async {
+    await _saveCurrentPositionIfPlaying();
 
-  /// Actualiza el estado interno a una nueva canción basado en su ID
-  Future<void> _updateInternalStateToSong(int songId) async {
-    try {
-      final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-
-      // FIX: Búsqueda segura para evitar crashes si la canción no está en la lista inmediata
-      LocalSong? newSong;
-
-      // 1. Intentar en la lista activa
-      try {
-        newSong = activeList.firstWhere((s) => s.id == songId);
-      } catch (_) {}
-
-      // 2. Intentar en la cola de siguientes
-      if (newSong == null) {
-        try {
-          newSong = _playNextQueue.firstWhere((s) => s.id == songId);
-        } catch (_) {}
-      }
-
-      // 3. Fallback: Buscar en la otra lista (original o shuffle) por si hubo cambio de modo
-      if (newSong == null) {
-        final otherList = _isShuffleMode ? _playlist : _shuffledPlaylist;
-        try {
-          newSong = otherList.firstWhere((s) => s.id == songId);
-        } catch (_) {}
-      }
-
-      // Si no se encuentra, abortar para evitar estados nulos o inconsistentes
-      if (newSong == null) {
-        // Imprimir siempre para depurar en release
-        print("⚠️ Canción ID $songId no encontrada en listas locales.");
-        return;
-      }
-
-      _currentPlayingSong = newSong;
-      currentSongNotifier.value = newSong;
-
-      // Actualizar índice si es posible
-      final index = activeList.indexWhere((s) => s.id == songId);
-      _currentIndex = index != -1 ? index : 0;
-
-      await _applyAdoVolumeBoost(newSong);
-      await _updateNotification();
-
-      // Si la canción que acaba de empezar estaba en la cola, la eliminamos
-      _playNextQueue.removeWhere((s) => s.id == songId);
-    } catch (e) {
-      // Imprimir siempre para depurar en release
-      print("Error actualizando estado de canción: $e");
+    if (loopModeNotifier.value == LoopMode.one) {
+      await setLoopMode(LoopMode.off);
     }
-  }
 
-  /// Guarda la posición cada 5 segundos
-  void _throttleSavePosition(Duration pos) {
-    final now = DateTime.now();
-    if (now.difference(_lastSaveTime).inSeconds >= 5) {
-      _lastSaveTime = now;
-      savePosition();
+    if (contextList != null && contextList != _playlistHandler.activePlaylist) {
+      _playlistHandler.setPlaylist(contextList);
+      if (isShuffleModeNotifier.value) {
+        _playlistHandler.setShuffleMode(true);
+      }
     }
-  }
 
-  /// Guarda la posición actual en SharedPreferences
-  Future<void> savePosition() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-        'last_played_position',
-        _player.position.inMilliseconds,
-      );
-    } catch (e) {}
-  }
+    _playlistHandler.setCurrentSong(song);
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      savePosition();
-    }
-  }
-
-  /// Reproduce una canción específica dentro de un contexto
-  Future<void> playSong(LocalSong song, List<LocalSong> contextList) async {
-    _isManualSkip = true;
-    _playlist = List.from(contextList);
-    _currentIndex = _playlist.indexWhere((s) => s.id == song.id);
-    _isShuffleMode = false;
-    isShuffleModeNotifier.value = false;
-    _notifyActivePlaylist();
+    _playlistLocked = true;
     await _playInternal(song);
   }
 
-  /// Reproduce con efecto fade in/out
-  Future<void> playWithFade(LocalSong song, List<LocalSong> contextList) async {
-    final originalVolume = _player.volume;
-    const steps = 20;
-    const fadeDuration = Duration(milliseconds: 1000);
-    final stepDuration = Duration(
-      milliseconds: fadeDuration.inMilliseconds ~/ steps,
-    );
-
-    if (_player.playing) {
-      for (int i = 1; i <= steps; i++) {
-        final vol = originalVolume * (1 - (i / steps));
-        await _player.setVolume(vol);
-        await Future.delayed(stepDuration);
-      }
-    }
-
-    await _player.setVolume(0);
-    await playSong(song, contextList);
-
-    for (int i = 1; i <= steps; i++) {
-      final vol = originalVolume * (i / steps);
-      await _player.setVolume(vol);
-      await Future.delayed(stepDuration);
-    }
-    await _player.setVolume(originalVolume);
-  }
-
-  /// Activa modo aleatorio
+  /// Reproduce en modo aleatorio desde una lista de contexto
   Future<void> shufflePlay(List<LocalSong> contextList) async {
-    _isManualSkip = true;
-    _playlist = List.from(contextList);
-    _shuffledPlaylist = List.from(contextList)..shuffle();
-    _isShuffleMode = true;
-    _currentIndex = 0;
+    await _saveCurrentPositionIfPlaying();
+
+    _playlistHandler.setPlaylist(contextList);
+
+    _playlistHandler.setShuffleMode(true);
     isShuffleModeNotifier.value = true;
-    _notifyActivePlaylist();
-    if (_shuffledPlaylist.isNotEmpty) {
-      await _playInternal(_shuffledPlaylist[0]);
+    _playlistLocked = true;
+
+    final activeList = _playlistHandler.activePlaylist;
+    if (activeList.isNotEmpty) {
+      final firstSong = _playlistHandler.getFirst();
+      if (firstSong != null) {
+        await _playInternal(firstSong);
+      }
     }
   }
 
-  /// Actualiza la playlist sin detener la reproducción
+  Future<void> playWithFade(
+    LocalSong song, [
+    List<LocalSong>? contextList,
+  ]) async {
+    await _playbackHandler.playWithFade(() => playSong(song, contextList));
+  }
+
+  /// Actualiza la lista base si no hay reproducción activa
   Future<void> updatePlaylist(List<LocalSong> newList) async {
-    final current = _currentPlayingSong;
-    _playlist = List.from(newList);
-
-    if (_isShuffleMode) {
-      _shuffledPlaylist = List.from(newList)..shuffle();
-      if (current != null) {
-        _shuffledPlaylist.removeWhere((s) => s.id == current.id);
-        _shuffledPlaylist.insert(0, current);
-      }
-    }
-
+    if (_playlistLocked) return;
+    _playlistHandler.updateBasePlaylist(newList);
     _notifyActivePlaylist();
-
-    if (current != null && _playlist.any((s) => s.id == current.id)) {}
   }
 
-  /// Alterna modo shuffle
+  /// Activa/desactiva el modo aleatorio
   Future<void> toggleShuffleMode() async {
-    _isShuffleMode = !_isShuffleMode;
-    isShuffleModeNotifier.value = _isShuffleMode;
-
-    final current = _currentPlayingSong;
-    if (_isShuffleMode) {
-      _shuffledPlaylist = List.from(_playlist)..shuffle();
-      if (current != null) {
-        _shuffledPlaylist.removeWhere((s) => s.id == current.id);
-        _shuffledPlaylist.insert(0, current);
-      }
-    }
+    final isShuffle = !isShuffleModeNotifier.value;
+    isShuffleModeNotifier.value = isShuffle;
+    _playlistHandler.setShuffleMode(isShuffle);
 
     _notifyActivePlaylist();
+    unawaited(_updateNotification());
+  }
 
-    if (current != null) {
-      // Forzar la actualización de la cola en el reproductor para que el botón "Siguiente"
-      // respete el nuevo orden aleatorio, pero manteniendo la posición actual de reproducción.
-      await _playSongAsCurrentWithoutQueue(
-        current,
-        forceUpdate: true,
-        initialPosition: _player.position,
-      );
+  /// Alterna entre repetir uno y sin repetir
+  Future<void> toggleLoopMode() async {
+    final newMode = loopModeNotifier.value == LoopMode.off
+        ? LoopMode.one
+        : LoopMode.off;
+    await setLoopMode(newMode);
+  }
+
+  /// Establece el modo de repetición nativo
+  Future<void> setLoopMode(LoopMode mode) async {
+    try {
+      loopModeNotifier.value = mode;
+      final nativeMode = (mode == LoopMode.one) ? LoopMode.off : mode;
+      await _playbackHandler.setLoopMode(nativeMode);
+    } on PlatformException catch (e) {
+      if (e.code != 'abort') rethrow;
     }
   }
 
-  /// Alterna el modo de repetición: Off <-> One (1-2-1-2)
-  Future<void> toggleLoopMode() async {
-    if (loopModeNotifier.value == LoopMode.off) {
-      await setLoopMode(LoopMode.one);
-    } else {
+  /// Inserta una canción para reproducirla a continuación
+  void addNext(LocalSong song) {
+    _nextQueue.addFirst(song);
+    unawaited(_updateNotification());
+  }
+
+  /// Avanza a la siguiente canción respetando cola y modos
+  Future<void> next() async {
+    if (loopModeNotifier.value == LoopMode.one) {
       await setLoopMode(LoopMode.off);
     }
-  }
 
-  /// Establece el modo de repetición
-  Future<void> setLoopMode(LoopMode mode) async {
-    loopModeNotifier.value = mode;
-    await _player.setLoopMode(mode);
-  }
-
-  /// Añade una canción a la cola de reproducción siguiente
-  void addNext(LocalSong song) {
-    _playNextQueue.removeWhere((s) => s.id == song.id);
-    _playNextQueue.add(song);
-    _notifyActivePlaylist();
-  }
-
-  /// Pasa a la siguiente canción
-  Future<void> next() async {
-    _isManualSkip = true;
-    if (_playNextQueue.isNotEmpty) {
-      if (!_playingFromPlayNext) {
-        _resumeMainIndex = _playlist.indexWhere(
-          (s) => s.id == _currentPlayingSong?.id,
-        );
-        _playingFromPlayNext = true;
-      }
-      await _playNextQueueNext();
+    if (_nextQueue.isNotEmpty) {
+      final queuedSong = _nextQueue.removeFirst();
+      await playSong(queuedSong);
       return;
     }
 
-    if (_playingFromPlayNext) {
-      _playingFromPlayNext = false;
-      final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-      if (activeList.isEmpty) return;
-      var nextIdx = (_resumeMainIndex ?? -1) + 1;
-      _resumeMainIndex = null;
-      if (nextIdx >= activeList.length) nextIdx = 0;
-      _currentIndex = nextIdx;
-      await _playSongAsCurrentWithoutQueue(activeList[nextIdx]);
-      return;
-    }
-
-    final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-    if (activeList.isEmpty) return;
-
-    try {
-      // Usar skipToNext() directamente si tenemos una ConcatenatingAudioSource
-      if (_player.hasNext) {
-        await _player.seekToNext();
-      } else {
-        // Fallback: reconstruir si es necesario
-        final currentIdx = activeList.indexWhere(
-          (s) => s.id == _currentPlayingSong?.id,
-        );
-        if (currentIdx != -1) {
-          var nextIdx = currentIdx + 1;
-          if (nextIdx >= activeList.length) {
-            if (loopModeNotifier.value == LoopMode.all) {
-              nextIdx = 0;
-            } else {
-              return;
-            }
-          }
-          _currentIndex = nextIdx;
-          await _playSongAsCurrentWithoutQueue(activeList[nextIdx]);
-        }
+    final nextSong = _playlistHandler.getNext();
+    if (nextSong != null) {
+      await playSong(nextSong);
+    } else if (loopModeNotifier.value == LoopMode.all) {
+      final first = _playlistHandler.getFirst();
+      if (first != null) {
+        await playSong(first);
       }
-    } catch (e) {}
+    }
   }
 
-  /// Pasa a la canción anterior
+  /// Retrocede a la canción anterior o reinicia la actual
   Future<void> previous() async {
-    _isManualSkip = true;
-    final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-    if (activeList.isEmpty) return;
+    if (loopModeNotifier.value == LoopMode.one) {
+      await setLoopMode(LoopMode.off);
+    }
 
     if (_player.position.inSeconds > 3) {
-      await _player.seek(Duration.zero);
+      await seek(Duration.zero);
       return;
     }
 
-    try {
-      // Usar skipToPrevious() directamente si tenemos una ConcatenatingAudioSource
-      if (_player.hasPrevious) {
-        await _player.seekToPrevious();
-      } else {
-        // Fallback: reconstruir si es necesario
-        final currentIdx = activeList.indexWhere(
-          (s) => s.id == _currentPlayingSong?.id,
-        );
-        if (currentIdx <= 0) {
-          if (loopModeNotifier.value == LoopMode.all) {
-            _currentIndex = activeList.length - 1;
-            await _playSongAsCurrentWithoutQueue(activeList[_currentIndex]);
-          }
-        } else {
-          _currentIndex = currentIdx - 1;
-          await _playSongAsCurrentWithoutQueue(activeList[_currentIndex]);
-        }
+    final prevSong = _playlistHandler.getPrevious();
+    if (prevSong != null) {
+      await playSong(prevSong);
+    } else if (loopModeNotifier.value == LoopMode.all) {
+      final last = _playlistHandler.getLast();
+      if (last != null) {
+        await playSong(last);
       }
-    } catch (e) {}
+    }
   }
 
-  /// Establece el modo de inicio
+  /// Busca una posición en la pista actual
+  Future<void> seek(Duration position) async =>
+      await _playbackHandler.seek(position);
+  /// Reanuda la reproducción
+  Future<void> play() async => await _playbackHandler.play();
+  /// Pausa la reproducción
+  Future<void> pause() async => await _playbackHandler.pause();
+  /// Alterna entre reproducir y pausar
+  Future<void> togglePlayPause() async =>
+      _player.playing ? await pause() : await play();
+
+  /// Define el modo de inicio de la app
   Future<void> setStartupMode(String mode) async {
+    await _stateManager.setStartupMode(mode);
     startupModeNotifier.value = mode;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefStartupMode, mode);
   }
 
-  /// Alterna la visibilidad del visualizador
+  /// Habilita/deshabilita el visualizador de música
   Future<void> toggleVisualizer(bool value) async {
+    await _stateManager.toggleVisualizer(value);
     showVisualizerNotifier.value = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_visualizer', value);
   }
 
-  /// Establece el temporizador de sueño
+  /// Configura el temporizador de reposo en minutos
   void setSleepTimer(int minutes) {
-    _sleepTimer?.cancel();
-
     if (minutes <= 0) {
+      _playbackHandler.cancelSleepTimer();
       sleepTimerNotifier.value = null;
       sleepEndTimeNotifier.value = null;
       return;
     }
-
     sleepTimerNotifier.value = minutes;
-    final duration = Duration(minutes: minutes);
-    sleepEndTimeNotifier.value = DateTime.now().add(duration);
-    _sleepTimer = Timer(duration, () {
-      _fadeOutAndPause();
-    });
+    sleepEndTimeNotifier.value = DateTime.now().add(Duration(minutes: minutes));
+    _playbackHandler.setSleepTimer(minutes, _fadeOutAndPause);
   }
 
-  /// Baja el volumen gradualmente y pausa la reproducción
-  Future<void> _fadeOutAndPause() async {
-    final originalVolume = _player.volume;
-    const steps = 20;
-    const fadeDuration = Duration(seconds: 4);
-    final stepDuration = Duration(
-      milliseconds: fadeDuration.inMilliseconds ~/ steps,
-    );
-
-    for (int i = 1; i <= steps; i++) {
-      if (!_player.playing) break;
-      final newVolume = originalVolume * (1 - (i / steps));
-      await _player.setVolume(newVolume);
-      await Future.delayed(stepDuration);
-    }
-
-    await pause();
-    sleepTimerNotifier.value = null;
+  /// Pausa al finalizar la canción actual (una sola vez)
+  void setSleepAtEndOfSong() {
+    sleepTimerNotifier.value = -1;
     sleepEndTimeNotifier.value = null;
-    await _player.setVolume(originalVolume);
   }
 
-  /// Ejecuta el comportamiento de inicio según configuración
-  Future<void> executeStartupBehavior(List<LocalSong> allSongs) async {
-    if (_hasStartupExecuted) {
-      isRestoringNotifier.value = false;
-      return;
-    }
-    if (allSongs.isEmpty) {
-      isRestoringNotifier.value = false;
-      return;
-    }
-
-    _cachedSongs = allSongs;
-    final mode = startupModeNotifier.value;
-    LocalSong? songToLoad;
-    Duration startPos = Duration.zero;
-
-    if (mode == startupLast) {
-      songToLoad = await _loadLastPlayedSong(allSongs);
-      if (songToLoad != null) {
-        final prefs = await SharedPreferences.getInstance();
-        startPos = Duration(
-          milliseconds: prefs.getInt('last_played_position') ?? 0,
-        );
-      }
-    } else if (mode == startupAdo) {
-      final adoSongs = allSongs
-          .where((s) => s.artist.toLowerCase().contains('ado'))
-          .toList();
-      if (adoSongs.isNotEmpty) {
-        songToLoad = adoSongs[Random().nextInt(adoSongs.length)];
-        startPos = Duration.zero;
-      } else {
-        // Fallback a Last Played si no hay canciones de Ado
-        songToLoad = await _loadLastPlayedSong(allSongs);
-        if (songToLoad != null) {
-          final prefs = await SharedPreferences.getInstance();
-          startPos = Duration(
-            milliseconds: prefs.getInt('last_played_position') ?? 0,
-          );
-        } else {
-          songToLoad = allSongs.first;
-        }
-      }
-    }
-
-    if (songToLoad != null) {
-      await setSong(songToLoad, play: false, initialPosition: startPos);
-    }
-    _hasStartupExecuted = true;
-    isRestoringNotifier.value = false;
-    _cachedSongs = null; // Liberar la memoria del caché de canciones
-  }
-
-  Future<LocalSong?> _loadLastPlayedSong(List<LocalSong> allSongs) async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastPath = prefs.getString('last_played_path');
-    if (lastPath != null) {
+  /// Maneja el fin de pista y decide el siguiente paso
+  Future<void> _handleSongCompleted() async {
+    if (_isHandlingCompletion) return;
+    _isHandlingCompletion = true;
+    try {
       try {
-        return allSongs.firstWhere((s) => s.path == lastPath);
+        await pause();
       } catch (_) {}
-    }
-    return null;
-  }
 
-  /// Reproducción interna de una canción
-  Future<void> _playInternal(LocalSong song) async {
-    _isManualSkip = true;
-    try {
-      _currentPlayingSong = song;
-      currentSongNotifier.value = song;
-      await _playSongAsCurrentWithoutQueue(song, forceUpdate: true);
-
-      // Asegurar que la reproducción inicie cuando se selecciona una canción
-      await _player.play();
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_played_path', song.path);
-      await prefs.setInt('last_played_position', 0);
-
-      // Mostrar notificación inmediatamente
-      await _updateNotification();
-    } catch (e) {
-      _showErrorDialog(e);
-    }
-  }
-
-  /// Reproduce una canción CON la cola completa para que la notificación vea siguiente/anterior
-  Future<void> _playSongAsCurrentWithoutQueue(
-    LocalSong song, {
-    bool forceUpdate = false,
-    Duration? initialPosition,
-  }) async {
-    try {
-      _currentPlayingSong = song;
-      currentSongNotifier.value = song;
-      _isPlayingSingleSource = false;
-
-      // Crear fuente de audio para la canción actual
-      final currentSource = AudioSource.file(
-        song.path,
-        tag: MediaItem(
-          id: song.id.toString(),
-          album: "MG Music",
-          title: song.title,
-          artist: song.artist,
-          artUri: Uri.parse(
-            "content://media/external/audio/media/${song.id}/albumart",
-          ),
-        ),
-      );
-
-      // Obtener la playlist activa
-      final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-      final currentIdx = activeList.indexWhere((s) => s.id == song.id);
-
-      // Construir lista de fuentes de audio (actual + próximas)
-      final sources = <AudioSource>[];
-
-      if (currentIdx != -1) {
-        // Agregar la canción actual y todas las siguientes
-        for (int i = currentIdx; i < activeList.length; i++) {
-          final s = activeList[i];
-          sources.add(
-            AudioSource.file(
-              s.path,
-              tag: MediaItem(
-                id: s.id.toString(),
-                album: "MG Music",
-                title: s.title,
-                artist: s.artist,
-                artUri: Uri.parse(
-                  "content://media/external/audio/media/${s.id}/albumart",
-                ),
-              ),
-            ),
-          );
-        }
-      } else {
-        // Si no está en la lista, solo agregar la canción actual
-        sources.add(currentSource);
-      }
-
-      // Crear ConcatenatingAudioSource con todas las canciones
-      final concatenatingSource = ConcatenatingAudioSource(children: sources);
-
-      // Verificar si ya hay algo reproduciéndose
-      final isCurrentlyPlaying = _player.playing;
-      final currentPosition = _player.position;
-
-      // Si la canción actual es la misma que ya está sonando, no reiniciar
-      if (!forceUpdate &&
-          _player.currentIndex != null &&
-          currentIdx != -1 &&
-          _player.currentIndex! == (currentIdx)) {
-        await _updateNotification();
+      if (sleepTimerNotifier.value == -1) {
+        sleepTimerNotifier.value = null;
+        sleepEndTimeNotifier.value = null;
+        await seek(Duration.zero);
         return;
       }
 
-      await _player.setAudioSource(
-        concatenatingSource,
-        initialIndex: currentIdx != -1 ? 0 : 0,
-        initialPosition: initialPosition,
-      );
-
-      if (isCurrentlyPlaying) {
-        await _player.play();
+      if (loopModeNotifier.value == LoopMode.one) {
+        await setLoopMode(LoopMode.off);
+        await seek(Duration.zero);
+        await play();
+        return;
       }
 
-      await _applyAdoVolumeBoost(song);
-      await _updateNotification();
+      if (_nextQueue.isNotEmpty) {
+        final manualNext = _nextQueue.removeFirst();
+        await playSong(manualNext);
+        return;
+      }
+
+      final nextSong = _playlistHandler.getNext();
+      if (nextSong != null) {
+        await playSong(nextSong);
+      } else if (loopModeNotifier.value == LoopMode.all) {
+        final first = _playlistHandler.getFirst();
+        if (first != null) {
+          await playSong(first);
+        }
+      } else {
+        try {
+          await pause();
+        } catch (_) {}
+        await seek(Duration.zero);
+      }
+    } on PlatformException catch (e) {
+      if (e.code != 'abort') {
+        unawaited(
+          GlobalModalService.showAudioError(
+            error: e,
+            errorCode: 'COMP-001 [${e.code}]',
+          ),
+        );
+      }
     } catch (e) {
-      _showErrorDialog(e);
+      unawaited(
+        GlobalModalService.showAudioError(
+          error: e,
+          errorCode: 'COMP-001 [${e.runtimeType}]',
+        ),
+      );
+    } finally {
+      await Future.delayed(const Duration(milliseconds: 500));
+      _isHandlingCompletion = false;
     }
   }
 
-  /// Carga una canción sin reproducir
+  /// Reduce volumen gradualmente y pausa
+  Future<void> _fadeOutAndPause() async {
+    await _playbackHandler.fadeOutAndPause();
+    sleepTimerNotifier.value = null;
+    sleepEndTimeNotifier.value = null;
+  }
+
+  /// Activa o desactiva el AdoBoost globalmente
+  Future<void> setAdoBoostEnabled(bool enabled) async {
+    adoBoostEnabledNotifier.value = enabled;
+    await AdoHandler.setBoostEnabled(enabled);
+    final current = currentSongNotifier.value;
+    if (current != null) {
+      unawaited(
+        _adoHandler.applyAdoVolumeBoost(
+          _player,
+          current,
+          1.0,
+          boostEnabled: enabled,
+          boostLevel: adoBoostLevelNotifier.value,
+        ),
+      );
+    }
+  }
+
+  /// Cambia y persiste el nivel de AdoBoost
+  Future<void> setAdoBoostLevel(double level) async {
+    final clamped = level.clamp(1.0, 1.5);
+    adoBoostLevelNotifier.value = clamped;
+    await AdoHandler.setBoostLevel(clamped);
+    final current = currentSongNotifier.value;
+    if (current != null && adoBoostEnabledNotifier.value) {
+      unawaited(
+        _adoHandler.applyAdoVolumeBoost(
+          _player,
+          current,
+          1.0,
+          boostEnabled: true,
+          boostLevel: clamped,
+        ),
+      );
+    }
+  }
+
+  /// Ejecuta el comportamiento de inicio (restaurar o elegir Ado)
+  Future<void> executeStartupBehavior(List<LocalSong> allSongs) async {
+    isRestoringNotifier.value = true;
+    _cachedSongs = allSongs;
+    final startup = await _stateManager.getStartupSong(allSongs);
+    if (startup != null) {
+      await setSong(
+        startup['song'],
+        play: false,
+        initialPosition: startup['position'],
+      );
+    }
+    isRestoringNotifier.value = false;
+    _cachedSongs = null;
+  }
+
+  /// Reproduce internamente una canción y actualiza estado
+  Future<void> _playInternal(
+    LocalSong song, {
+    bool keepPosition = false,
+  }) async {
+    final initialPosition = keepPosition ? _player.position : Duration.zero;
+
+    currentSongNotifier.value = song;
+    _playlistHandler.setCurrentSong(song);
+    _notifyActivePlaylist();
+
+    unawaited(_stateManager.saveLastPlayedSong(song));
+
+    try {
+      final source = _playlistHandler.createSingleSource(song);
+      await _player.setAudioSource(source, initialPosition: initialPosition);
+
+      _audioHandler?.updateMetadata(song);
+      await _player.play();
+
+      unawaited(
+        _adoHandler.applyAdoVolumeBoost(
+          _player,
+          song,
+          1.0,
+          boostEnabled: adoBoostEnabledNotifier.value,
+          boostLevel: adoBoostLevelNotifier.value,
+        ),
+      );
+      unawaited(_updateNotification());
+    } on PlatformException catch (e) {
+      if (e.code != 'abort') {
+        unawaited(
+          GlobalModalService.showAudioError(
+            error: e,
+            errorCode: 'PLAY-001 [${e.code}]',
+          ),
+        );
+      }
+    } catch (e) {
+      unawaited(
+        GlobalModalService.showAudioError(
+          error: e,
+          errorCode: 'PLAY-001 [${e.runtimeType}]',
+        ),
+      );
+    }
+  }
+
+  /// Fija la canción actual sin reproducir obligatoriamente
   Future<void> setSong(
     LocalSong song, {
     bool play = false,
     Duration? initialPosition,
   }) async {
-    _isManualSkip = true;
+    _updateInternalStateToSong(song);
+    _notifyActivePlaylist();
+
     try {
-      _currentPlayingSong = song;
-      currentSongNotifier.value = song;
+      final source = _playlistHandler.createSingleSource(song);
+      await _player.setAudioSource(source, initialPosition: initialPosition);
 
-      final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-      _currentIndex = activeList.indexWhere((s) => s.id == song.id);
-
-      final sources = <AudioSource>[];
-      if (_currentIndex != -1) {
-        for (int i = _currentIndex; i < activeList.length; i++) {
-          final s = activeList[i];
-          sources.add(
-            AudioSource.file(
-              s.path,
-              tag: MediaItem(
-                id: s.id.toString(),
-                album: "MG Music",
-                title: s.title,
-                artist: s.artist,
-                artUri: Uri.parse(
-                  "content://media/external/audio/media/${s.id}/albumart",
-                ),
-              ),
-            ),
-          );
-        }
-      } else {
-        // Canción no está en la lista, agregar solo
-        sources.add(
-          AudioSource.file(
-            song.path,
-            tag: MediaItem(
-              id: song.id.toString(),
-              album: "MG Music",
-              title: song.title,
-              artist: song.artist,
-              artUri: Uri.parse(
-                "content://media/external/audio/media/${song.id}/albumart",
-              ),
-            ),
+      if (play) await _player.play();
+    } on PlatformException catch (e) {
+      if (e.code != 'abort') {
+        unawaited(
+          GlobalModalService.showAudioError(
+            error: e,
+            errorCode: 'PLAY-002 [${e.code}]',
           ),
         );
       }
-
-      final concatenatingSource = ConcatenatingAudioSource(children: sources);
-      _isPlayingSingleSource = false;
-      await _player.setAudioSource(concatenatingSource, initialIndex: 0);
-
-      if (initialPosition != null) await _player.seek(initialPosition);
-      if (play) {
-        await _player.play();
-        await _applyAdoVolumeBoost(song);
-      }
-
-      // Actualizar notificación
-      await _updateNotification();
     } catch (e) {
-      _showErrorDialog(e);
-    }
-  }
-
-  /// Reproduce el siguiente item de la cola especial
-  Future<void> _playNextQueueNext() async {
-    _isManualSkip = true;
-    if (_playNextQueue.isEmpty) return;
-    final nextSong = _playNextQueue.removeAt(0);
-    try {
-      await _playSongAsCurrentWithoutQueue(nextSong);
-      _notifyActivePlaylist();
-    } catch (e) {}
-  }
-
-  /// Actualiza la notificación del sistema con controles de navegación
-  Future<void> _updateNotification() async {
-    try {
-      final song = currentSongNotifier.value;
-      final playing = isPlayingNotifier.value;
-
-      if (song != null) {
-        // Por defecto, siempre mostrar los botones
-        // Solo ocultarlos en casos muy específicos
-        bool showPrevious = true;
-        bool showNext = true;
-
-        final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-
-        if (activeList.isNotEmpty) {
-          final currentIdx = activeList.indexWhere((s) => s.id == song.id);
-
-          if (currentIdx != -1) {
-            // Si encontramos la canción actual en la lista
-            showPrevious = currentIdx > 0;
-            showNext =
-                currentIdx < activeList.length - 1 ||
-                loopModeNotifier.value == LoopMode.all ||
-                _playNextQueue.isNotEmpty;
-          } else {
-            // Si no encontramos la canción en la lista (puede pasar durante reconstrucciones)
-            // Mostrar los botones siempre por seguridad
-            showPrevious = true;
-            showNext = true;
-          }
-        }
-
-        // Enviar datos al canal nativo
-        await NotificationChannel.show(
-          title: song.title,
-          artist: song.artist,
-          artUri: "content://media/external/audio/media/${song.id}/albumart",
-          isPlaying: playing,
-          showPrevious: showPrevious,
-          showNext: showNext,
-        );
-      }
-    } catch (e, stackTrace) {}
-  }
-
-  /// Busca a una posición específica
-  Future<void> seek(Duration position) async {
-    await _player.seek(position);
-  }
-
-  /// Inicia la reproducción
-  Future<void> play() async {
-    await _player.play();
-    await _updateNotificationState();
-  }
-
-  /// Pausa la reproducción
-  Future<void> pause() async {
-    await _player.pause();
-    await _updateNotificationState();
-  }
-
-  /// Alterna entre reproducción y pausa
-  Future<void> togglePlayPause() async {
-    if (_player.playing) {
-      await pause();
-    } else {
-      await play();
-    }
-  }
-
-  /// Actualiza solo el estado de reproducción en la notificación
-  Future<void> _updateNotificationState() async {
-    try {
-      final song = currentSongNotifier.value;
-      final playing = isPlayingNotifier.value;
-
-      if (song != null) {
-        bool showPrevious = true;
-        bool showNext = true;
-
-        final activeList = _isShuffleMode ? _shuffledPlaylist : _playlist;
-        if (activeList.isNotEmpty) {
-          final currentIdx = activeList.indexWhere((s) => s.id == song.id);
-          if (currentIdx != -1) {
-            showPrevious = currentIdx > 0;
-            showNext =
-                currentIdx < activeList.length - 1 ||
-                loopModeNotifier.value == LoopMode.all ||
-                _playNextQueue.isNotEmpty;
-          }
-        }
-
-        // Usar _updateNotification para asegurar que se muestre (show) y no solo actualice
-        await _updateNotification();
-      }
-    } catch (e) {}
-  }
-
-  /// Notifica cambios en la playlist
-  void _notifyActivePlaylist() {
-    activePlaylistNotifier.value = List.from(playlist);
-  }
-
-  /// Libera recursos
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _player.dispose();
-  }
-
-  /// Muestra un modal con el error para que el usuario pueda reportarlo
-  void _showErrorDialog(Object error) {
-    if (navigatorKey.currentState != null &&
-        navigatorKey.currentState!.overlay != null) {
-      final context = navigatorKey.currentState!.overlay!.context;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.grey.shade900,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-            side: BorderSide(color: Colors.red.shade900, width: 2),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red),
-              SizedBox(width: 10),
-              Text(
-                'Error de Reproducción',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Ha ocurrido un problema al intentar reproducir esta pista. Por favor, reporta este error para que podamos solucionarlo.',
-                style: TextStyle(color: Colors.white70, height: 1.5),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Código: $error',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cerrar', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade700,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.of(context).pop();
-                _reportErrorToWhatsApp(error);
-              },
-              child: const Text('Reportar Error'),
-            ),
-          ],
+      unawaited(
+        GlobalModalService.showAudioError(
+          error: e,
+          errorCode: 'PLAY-002 [${e.runtimeType}]',
         ),
       );
-    } else {
-      print('Playback Error: $error');
     }
   }
 
-  /// Abrir WhatsApp con el error prellenado
-  Future<void> _reportErrorToWhatsApp(Object error) async {
-    final message =
-        'Hola MG Studios, estoy reportando un error de reproducción en la app MG Music.\n\nAquí están los detalles del error:\n$error';
-    final urlString =
-        'https://wa.me/573168060939?text=${Uri.encodeComponent(message)}';
-    final Uri url = Uri.parse(urlString);
-    try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+  /// Sincroniza estado interno con una canción
+  void _updateInternalStateToSong(LocalSong song) {
+    currentSongNotifier.value = song;
+    _playlistHandler.setCurrentSong(song);
+    _adoHandler.applyAdoVolumeBoost(_player, song, 1.0);
+    _audioHandler?.updateMetadata(song);
+    unawaited(_updateNotification());
+  }
+
+  /// Guarda la posición de la pista actual si está sonando
+  Future<void> _saveCurrentPositionIfPlaying() async {
+    if (currentSongNotifier.value != null && _player.playing) {
+      await _stateManager.savePosition(_player.position);
+      await _stateManager.savePositionFor(currentSongNotifier.value!, _player.position);
+    }
+  }
+
+  /// Guarda la posición actual sin condiciones
+  Future<void> savePosition() async {
+    await _stateManager.savePosition(_player.position);
+    final song = currentSongNotifier.value;
+    if (song != null) {
+      await _stateManager.savePositionFor(song, _player.position);
+    }
+  }
+
+  /// Ahorra escrituras guardando posición cada ~2s
+  void _throttleSavePosition(Duration pos) {
+    if (DateTime.now().difference(_lastSaveTime).inSeconds >= 2) {
+      _lastSaveTime = DateTime.now();
+      unawaited(savePosition());
+    }
+  }
+
+  /// Actualiza la notificación del sistema (si aplica)
+  Future<void> _updateNotification() async {
+  }
+
+  /// Fuerza un refresco de la notificación
+  Future<void> refreshNotification() async {
+    await _updateNotification();
+  }
+
+  /// Emite la playlist activa a la UI
+  void _notifyActivePlaylist() {
+    activePlaylistNotifier.value = List.from(_playlistHandler.activePlaylist);
+  }
+
+  @override
+  /// Guarda posición en estados de pausa/inactividad
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      unawaited(savePosition());
+    }
+  }
+
+  /// Libera recursos y observadores
+  void dispose() {
+    _watchdogTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _player.dispose();
   }
 }

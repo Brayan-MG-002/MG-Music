@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class SharedCoverHeader extends StatelessWidget {
   final AppThemeMode mode;
@@ -22,7 +23,6 @@ class SharedCoverHeader extends StatelessWidget {
   });
 
   @override
-  /// Construye un header con portada, glow opcional y bottom flexible
   Widget build(BuildContext context) {
     return SliverAppBar(
       backgroundColor: AppColors.background(mode),
@@ -33,12 +33,19 @@ class SharedCoverHeader extends StatelessWidget {
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: BoxDecoration(
-            gradient: AppGradients.of(mode, GradientDirection.topBottom),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.background(mode),
+                AppColors.primaryBlueMid,
+              ],
+            ),
           ),
           child: SafeArea(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 100),
+                padding: EdgeInsets.only(bottom: 80.h),
                 child: AnimationConfiguration.synchronized(
                   duration: const Duration(milliseconds: 800),
                   child: FadeInAnimation(
@@ -50,21 +57,21 @@ class SharedCoverHeader extends StatelessWidget {
                           final double animationValue =
                               glowAnimation?.value ?? 0.0;
                           final glowRadius = isGlowActive
-                              ? 20 + (animationValue * 25)
-                              : 20.0;
+                              ? (20 + (animationValue * 25)).r
+                              : 20.0.r;
                           final glowOpacity = isGlowActive
                               ? 0.4 + (animationValue * 0.4)
                               : 0.2;
 
                           return Container(
-                            width: 210,
-                            height: 210,
+                            width: 180.r,
+                            height: 180.r,
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(20.r),
                               border: isGlowActive
                                   ? Border.all(
                                       color: AppColors.themeBorder(mode),
-                                      width: 2.5,
+                                      width: 2.5.w,
                                     )
                                   : null,
                               boxShadow: [
@@ -72,9 +79,9 @@ class SharedCoverHeader extends StatelessWidget {
                                   color: AppColors.themeBorder(
                                     mode,
                                   ).withOpacity(0.4),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                  offset: const Offset(0, 10),
+                                  blurRadius: 20.r,
+                                  spreadRadius: 2.r,
+                                  offset: Offset(0, 8.h),
                                 ),
                                 if (isGlowActive)
                                   BoxShadow(
@@ -82,20 +89,20 @@ class SharedCoverHeader extends StatelessWidget {
                                       glowOpacity,
                                     ),
                                     blurRadius: glowRadius,
-                                    spreadRadius: 5 + (animationValue * 5),
+                                    spreadRadius: (5 + (animationValue * 5)).r,
                                   )
                                 else
                                   BoxShadow(
                                     color: AppColors.primaryBlueMid.withOpacity(
                                       0.2,
                                     ),
-                                    blurRadius: 30,
-                                    spreadRadius: 5,
+                                    blurRadius: 30.r,
+                                    spreadRadius: 5.r,
                                   ),
                               ],
                             ),
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(20.r),
                               child: artwork != null
                                   ? Image.memory(artwork!, fit: BoxFit.cover)
                                   : Container(
@@ -115,7 +122,7 @@ class SharedCoverHeader extends StatelessWidget {
                                       ),
                                       child: Center(
                                         child: Padding(
-                                          padding: const EdgeInsets.all(40),
+                                          padding: EdgeInsets.all(35.r),
                                           child: Image.asset(
                                             'assets/MG-I-T.png',
                                             fit: BoxFit.contain,

@@ -3,13 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/bottom_modal_service.dart';
-import 'package:mg_music/services/ui/custom_toast_service.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
+import 'link_dialog.dart';
 
 class DonateModal extends StatelessWidget {
   const DonateModal({super.key});
 
-  /// Abre el modal de donación con imagen, número y acción de copiar
   static void show(BuildContext context) {
     final mode = Provider.of<ThemeService>(context, listen: false).mode;
 
@@ -19,48 +19,42 @@ class DonateModal extends StatelessWidget {
       subtitle: 'Tu apoyo es voluntario y muy valorado',
 
       heroContent: Container(
-        width: 200,
-        height: 200,
+        width: 140.r,
+        height: 140.r,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(15.r),
         ),
-        padding: const EdgeInsets.all(10),
+        padding: EdgeInsets.all(8.r),
         child: Image.asset('assets/MG Studios/MG-D.png'),
       ),
 
       child: SelectableText(
-        '316 806 0939',
+        'PayPal',
         textAlign: TextAlign.center,
         style: TextStyle(
           color: AppColors.textPrimary(mode),
-          fontSize: 24,
+          fontSize: 18.sp,
           fontWeight: FontWeight.bold,
         ),
       ),
 
       options: [
         BottomModalOption(
-          icon: Ionicons.copy_outline,
-          label: 'Copiar Número',
+          icon: Ionicons.logo_paypal,
+          label: 'Donar en PayPal',
           onTap: () {
-            Clipboard.setData(const ClipboardData(text: '3168060939'));
-            CustomToastService.show(
-              context,
-              message: 'Número copiado al portapapeles',
-              type: ToastType.success,
-            );
+            Navigator.pop(context);
+            LinkDialog.launchExternalUrl('https://www.paypal.com/donate/?hosted_button_id=Y36JD745Z49UN');
           },
         ),
       ],
 
-      footerText:
-          'Tu donación vía Nequi es totalmente opcional, pero me ayudas mucho a continuar con el desarrollo de la app. ¡Gracias por tu apoyo!',
+      footerText: 'Tu donación vía PayPal es totalmente opcional, pero me ayudas mucho a continuar con el desarrollo de la app. ¡Gracias por tu apoyo!',
     );
   }
 
   @override
-  /// Contenido vacío (controlado por el modal)
   Widget build(BuildContext context) {
     return const SizedBox.shrink();
   }

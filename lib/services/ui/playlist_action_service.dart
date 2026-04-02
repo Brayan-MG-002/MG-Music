@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Servicio reutilizable para gestionar acciones de playlists (Añadir/Crear)
+// Servicio especializado en la gestión de acciones relacionadas con playlists, como creación, adición de canciones y renombrado, con soporte para navegación TV.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
@@ -8,23 +8,17 @@ import 'package:mg_music/services/models/song_model.dart';
 import 'package:mg_music/services/ui/custom_toast_service.dart';
 import 'package:mg_music/services/ui/global_modal_service.dart';
 import 'package:flutter/services.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class PlaylistActionService {
-  // Constante interna para la opción de crear nueva playlist
   static const String _createNewPlaylistOption = '__CREATE_NEW_PLAYLIST__';
 
-  /// Muestra el flujo completo para añadir una canción a una playlist:
-  /// 1. Seleccionar existente o crear nueva.
-  /// 2. Si es nueva, pedir nombre.
-  /// 3. Confirmar si ya existe o crearla.
-  /// 4. Añadir la canción y mostrar feedback.
   static Future<void> showAddToPlaylistDialog(
     BuildContext context,
     LocalSong song,
   ) async {
     final playlistManager = PlaylistManager();
 
-    // 1. Mostrar modal para seleccionar playlist existente o crear nueva
     final List<String> playlistOptions = [
       _createNewPlaylistOption,
       ...playlistManager.playlistsNotifier.value,
@@ -43,17 +37,15 @@ class PlaylistActionService {
     );
 
     if (selectedOption == null) {
-      return; // El usuario canceló
+      return;
     }
 
     if (selectedOption == _createNewPlaylistOption) {
-      // 2. Si eligió "Crear Nueva", mostramos el input
       final inputKey = GlobalKey<_NewPlaylistInputContentState>();
       final cancelFocus = FocusNode();
       final createFocus = FocusNode();
       final textFocus = FocusNode();
 
-      // Usamos el navigatorKey global para asegurar que el contexto del diálogo sea correcto al cerrar
       final navigatorContext = GlobalModalService.navigatorKey.currentContext!;
 
       final newPlaylistName = await GlobalModalService.show<String>(
@@ -86,7 +78,6 @@ class PlaylistActionService {
               }
 
               if (playlistManager.playlistsNotifier.value.contains(name)) {
-                // Si ya existe, pedimos confirmación
                 final addToExisting = await GlobalModalService.showConfirmation(
                   title: "Playlist Existente",
                   message:
@@ -97,24 +88,19 @@ class PlaylistActionService {
                 );
 
                 if (addToExisting) {
-                  // 1. Añadimos a la existente
                   playlistManager.addSongToPlaylist(name, song);
-                  // 2. Cerramos el modal de Input
                   if (navigatorContext.mounted) {
                     Navigator.pop(navigatorContext);
                   }
-                  // 3. Feedback
                   CustomToastService.show(
                     navigatorContext,
                     message: 'Añadida a "$name"',
                     type: ToastType.success,
                   );
                 } else {
-                  // Si cancela, nos quedamos en el input para que cambie el nombre
                   state.setError('Por favor, elige otro nombre.');
                 }
               } else {
-                // Si no existe, retornamos el nombre para crearlo fuera
                 Navigator.pop(navigatorContext, name);
               }
             },
@@ -135,7 +121,6 @@ class PlaylistActionService {
         );
       }
     } else {
-      // Usuario seleccionó una existente directamente
       playlistManager.addSongToPlaylist(selectedOption, song);
       CustomToastService.show(
         context,
@@ -145,7 +130,108 @@ class PlaylistActionService {
     }
   }
 
-  /// Muestra solo el flujo de creación de playlist (sin canción asociada).
+  static Future<void> showAddMultipleToPlaylistDialog(
+    BuildContext context,
+    List<LocalSong> songs,
+  ) async {
+    if (songs.isEmpty) return;
+    final playlistManager = PlaylistManager();
+
+    final List<String> playlistOptions = [
+      _createNewPlaylistOption,
+      ...playlistManager.playlistsNotifier.value,
+    ];
+
+    final selectedOption = await GlobalModalService.showSelectionList<String>(
+      title: "Añadir ${songs.length} a Playlist",
+      icon: Ionicons.add_circle,
+      items: playlistOptions,
+      labelBuilder: (item) {
+        if (item == _createNewPlaylistOption) {
+          return 'Crear Nueva Playlist';
+        }
+        return item;
+      },
+    );
+
+    if (selectedOption == null) return;
+
+    if (selectedOption == _createNewPlaylistOption) {
+      final inputKey = GlobalKey<_NewPlaylistInputContentState>();
+      final cancelFocus = FocusNode();
+      final createFocus = FocusNode();
+      final textFocus = FocusNode();
+      final navigatorContext = GlobalModalService.navigatorKey.currentContext!;
+
+      final newPlaylistName = await GlobalModalService.show<String>(
+        title: "Nueva Playlist",
+        icon: Ionicons.create,
+        content: _NewPlaylistInputContent(
+          key: inputKey,
+          nextFocus: createFocus,
+          autofocus: true,
+          textFocus: textFocus,
+        ),
+        actions: [
+          ModalActionButton(
+            label: "Cancelar",
+            onPressed: () => Navigator.pop(navigatorContext),
+            color: Colors.grey,
+            focusNode: cancelFocus,
+          ),
+          ModalActionButton(
+            label: "Crear",
+            onPressed: () async {
+              final state = inputKey.currentState;
+              if (state == null) return;
+              final name = state.controller.text.trim();
+              if (name.isEmpty) {
+                state.setError('El nombre no puede estar vacío');
+                return;
+              }
+              if (playlistManager.playlistsNotifier.value.contains(name)) {
+                final addToExisting = await GlobalModalService.showConfirmation(
+                  title: "Playlist Existente",
+                  message: "¿Añadir las canciones a la playlist '$name' existente?",
+                  confirmText: "Añadir",
+                  cancelText: "Cambiar Nombre",
+                  confirmButtonColor: Colors.blue.shade900,
+                );
+                if (addToExisting) {
+                  for (var song in songs) {
+                    await playlistManager.addSongToPlaylist(name, song);
+                  }
+                  if (navigatorContext.mounted) Navigator.pop(navigatorContext);
+                  CustomToastService.show(navigatorContext, message: 'Añadidas a "$name"', type: ToastType.success);
+                } else {
+                  state.setError('Por favor, elige otro nombre.');
+                }
+              } else {
+                Navigator.pop(navigatorContext, name);
+              }
+            },
+            color: Colors.blue.shade900,
+            focusNode: createFocus,
+          ),
+        ],
+        initialFocus: textFocus,
+      );
+
+      if (newPlaylistName != null && newPlaylistName.isNotEmpty) {
+        await playlistManager.createPlaylist(newPlaylistName);
+        for (var song in songs) {
+          await playlistManager.addSongToPlaylist(newPlaylistName, song);
+        }
+        CustomToastService.show(context, message: 'Playlist "$newPlaylistName" creada y ${songs.length} pistas añadidas', type: ToastType.success);
+      }
+    } else {
+      for (var song in songs) {
+        await playlistManager.addSongToPlaylist(selectedOption, song);
+      }
+      CustomToastService.show(context, message: 'Añadidas ${songs.length} pistas a "$selectedOption"', type: ToastType.success);
+    }
+  }
+
   static Future<void> showCreatePlaylistDialog(BuildContext context) async {
     final playlistManager = PlaylistManager();
     final inputKey = GlobalKey<_NewPlaylistInputContentState>();
@@ -203,7 +289,6 @@ class PlaylistActionService {
     }
   }
 
-  /// Renombra una playlist existente mostrando un modal con input enfocable para TV.
   static Future<String?> showRenamePlaylistDialog(
     BuildContext context, {
     required String oldName,
@@ -271,7 +356,6 @@ class PlaylistActionService {
   }
 }
 
-/// Widget interno para gestionar el input y el estado de error
 class _NewPlaylistInputContent extends StatefulWidget {
   final FocusNode? nextFocus;
   final bool autofocus;
@@ -351,7 +435,7 @@ class _NewPlaylistInputContentState extends State<_NewPlaylistInputContent> {
       },
       child: TextField(
         controller: _textController,
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: Colors.white, fontSize: 14.sp),
         cursorColor: Colors.blue.shade900,
         focusNode: _textFocus,
         autofocus: widget.autofocus,
@@ -368,24 +452,25 @@ class _NewPlaylistInputContentState extends State<_NewPlaylistInputContent> {
         },
         decoration: InputDecoration(
           hintText: 'Nombre de la playlist',
-          hintStyle: TextStyle(color: Colors.grey.shade600),
+          hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14.sp),
           errorText: _errorText,
-          errorStyle: const TextStyle(color: Colors.redAccent),
+          errorStyle: TextStyle(color: Colors.redAccent, fontSize: 12.sp),
+          contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.grey.shade800),
+            borderRadius: BorderRadius.circular(10.r),
+            borderSide: BorderSide(color: Colors.grey.shade800, width: 1.w),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.blue.shade900),
+            borderRadius: BorderRadius.circular(10.r),
+            borderSide: BorderSide(color: Colors.blue.shade900, width: 1.2.w),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.redAccent),
+            borderRadius: BorderRadius.circular(10.r),
+            borderSide: BorderSide(color: Colors.redAccent, width: 1.w),
           ),
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.redAccent),
+            borderRadius: BorderRadius.circular(10.r),
+            borderSide: BorderSide(color: Colors.redAccent, width: 1.2.w),
           ),
           filled: true,
           fillColor: Colors.grey.shade900,

@@ -2,7 +2,7 @@
 // Lógica para el manejo especial de canciones de Ado — con AdoBoost.
 
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, TargetPlatform, debugPrint;
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:just_audio/just_audio.dart';
 import 'package:mg_music/services/models/song_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,19 +62,29 @@ class AdoHandler {
 
   /// Determina si una canción es de Ado (por artista o ruta)
   static bool isAdo(LocalSong song) {
-    // 1. Verificar por artista
+    // 1. Verificar por artista directamente
     if (isAdoString(song.artist)) return true;
-    
-    // 2. Verificar por ruta (si la carpeta se llama Ado o MG Ado)
-    final pathLower = song.path.toLowerCase();
-    if (pathLower.contains('/ado/') || 
-        pathLower.contains('\\ado\\') ||
-        pathLower.contains('/mg ado/') || 
-        pathLower.contains('\\mg ado\\')) {
-      return true;
+
+    // 2. Verificar por ruta solo si el artista es desconocido
+    if (song.artist == 'Artista Desconocido') {
+      final pathLower = song.path.toLowerCase();
+      if (pathLower.contains('/ado/') ||
+          pathLower.contains('\\ado\\') ||
+          pathLower.contains('/mg ado/') ||
+          pathLower.contains('\\mg ado\\')) {
+        return true;
+      }
     }
 
     return false;
+  }
+
+  /// Determina si una canción de Ado es de Alta Calidad (HQ)
+  static bool isHighQuality(LocalSong song) {
+    final pathLower = song.path.toLowerCase();
+    return pathLower.endsWith('.flac') ||
+        pathLower.endsWith('.wav') ||
+        pathLower.endsWith('.alac');
   }
 
   /// Aplica/restaura AdoBoost según plataforma y configuración
@@ -95,11 +105,11 @@ class AdoHandler {
           _loudnessEnhancer != null) {
         // Android: usar LoudnessEnhancer
         final targetGain = shouldBoost ? _levelToDb(boostLevel) : 0.0;
-        
+
         // Aplicar solo si es necesario para evitar ruidos o errores en el stream
         await _loudnessEnhancer!.setEnabled(shouldBoost);
         await _loudnessEnhancer!.setTargetGain(targetGain);
-        
+
         // Asegurar que el volumen del player esté en 1.0 (o el original)
         if (player.volume != originalVolume) {
           await player.setVolume(originalVolume);
@@ -110,8 +120,6 @@ class AdoHandler {
           await player.setVolume(originalVolume);
         }
       }
-    } catch (e) {
-      debugPrint('Error aplicando AdoBoost: $e');
-    }
+    } catch (e) {}
   }
 }

@@ -1,23 +1,15 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Widget de transición animada entre temas claro y oscuro.
+// Componentes para la transición animada entre temas del sistema, incluyendo un contenedor de fondo y un botón de alternancia con efectos visuales.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme_service.dart';
 
-/// Envuelve cualquier árbol de widgets y anima el cambio de fondo
-/// cuando el tema cambia entre oscuro y claro.
-///
-/// Uso:
-/// ```dart
-/// AnimatedThemeSwitcher(child: MyApp())
-/// ```
 class AnimatedThemeSwitcher extends StatelessWidget {
   final Widget child;
   const AnimatedThemeSwitcher({super.key, required this.child});
 
   @override
-  /// Construye un contenedor que anima el cambio de fondo según el tema
   Widget build(BuildContext context) {
     final themeService = context.watch<ThemeService>();
     final isDark = themeService.isDark;
@@ -39,9 +31,6 @@ class AnimatedThemeSwitcher extends StatelessWidget {
   }
 }
 
-/// Botón toggle de tema con animación interna.
-/// Úsalo dentro de un Consumer<ThemeService> o en cualquier widget
-/// que tenga acceso al Provider.
 class ThemeToggleButton extends StatefulWidget {
   const ThemeToggleButton({super.key});
 
@@ -56,7 +45,6 @@ class _ThemeToggleButtonState extends State<ThemeToggleButton>
   late final Animation<double> _scale;
 
   @override
-  /// Inicializa animaciones de rotación y escala
   void initState() {
     super.initState();
     _controller = AnimationController(
@@ -74,20 +62,17 @@ class _ThemeToggleButtonState extends State<ThemeToggleButton>
   }
 
   @override
-  /// Libera recursos de la animación
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
-  /// Alterna el tema con una breve animación
   Future<void> _handleToggle(ThemeService service) async {
     _controller.forward(from: 0.0);
     await service.toggle();
   }
 
   @override
-  /// Construye el botón de toggle de tema con animaciones
   Widget build(BuildContext context) {
     final service = context.watch<ThemeService>();
     final isDark = service.isDark;

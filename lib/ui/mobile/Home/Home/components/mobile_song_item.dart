@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:mg_music/services/audio/audio_player_manager.dart';
 import 'package:mg_music/services/logic/favorites_manager.dart';
 import 'package:mg_music/services/models/song_model.dart';
-import 'package:mg_music/services/ui/bottom_modal_service.dart';
-import 'package:mg_music/services/ui/custom_toast_service.dart';
-import 'package:mg_music/services/ui/playlist_action_service.dart';
+import 'package:mg_music/services/audio/ado_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/services/ui/song_context_menu_service.dart';
 
 class MobileSongItem extends StatefulWidget {
   final LocalSong song;
@@ -17,6 +15,11 @@ class MobileSongItem extends StatefulWidget {
   final VoidCallback? onLongPress;
   final bool isGrid;
   final bool isPlaying;
+  final bool isSelected;
+  final VoidCallback? onEditSong;
+  final VoidCallback? onSongDeleted;
+  final VoidCallback? onDoubleTap;
+  final VoidCallback? onMultiSelect;
 
   const MobileSongItem({
     super.key,
@@ -26,6 +29,11 @@ class MobileSongItem extends StatefulWidget {
     this.onLongPress,
     required this.isGrid,
     this.isPlaying = false,
+    this.isSelected = false,
+    this.onEditSong,
+    this.onSongDeleted,
+    this.onDoubleTap,
+    this.onMultiSelect,
   });
 
   @override
@@ -51,7 +59,7 @@ class _MobileSongItemState extends State<MobileSongItem>
       vsync: this,
     );
     _fadeInController = AnimationController(
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     )..forward();
     _playingGlowController = AnimationController(
@@ -104,68 +112,13 @@ class _MobileSongItemState extends State<MobileSongItem>
   }
 
   void _showOptions(BuildContext context) {
-    final isFav = FavoritesManager().isFavorite(widget.song);
-
-    BottomModalService.show(
+    SongContextMenuService.showOptions(
       context,
-      title: widget.song.title,
-      subtitle: widget.song.artist,
-      artwork: widget.song.artwork,
-      options: [
-        BottomModalOption(
-          icon: Ionicons.play_skip_forward_outline,
-          label: "Reproducir Siguiente",
-          onTap: () {
-            AudioPlayerManager().addNext(widget.song);
-            Navigator.pop(context);
-            CustomToastService.show(
-              context,
-              message: "Reproduciendo Siguiente",
-              type: ToastType.info,
-              icon: Ionicons.play_skip_forward,
-            );
-          },
-        ),
-        BottomModalOption(
-          icon: isFav ? Ionicons.heart_dislike : Ionicons.heart,
-          label: isFav ? "Quitar de Favoritos" : "Agregar a Favoritos",
-          onTap: () async {
-            final success = await FavoritesManager().toggleFavorite(
-              widget.song,
-            );
-            if (!context.mounted) return;
-
-            if (!success) {
-              Navigator.pop(context);
-              CustomToastService.show(
-                context,
-                message: 'No puedes desmarcar tu canción principal',
-                type: ToastType.error,
-              );
-              return;
-            }
-
-            _onFavoriteToggled();
-            Navigator.pop(context);
-            CustomToastService.show(
-              context,
-              message: isFav
-                  ? "Eliminado de Favoritos"
-                  : "Agregado a Favoritos",
-              type: isFav ? ToastType.warning : ToastType.success,
-              icon: isFav ? Ionicons.heart_dislike : Ionicons.heart,
-            );
-          },
-        ),
-        BottomModalOption(
-          icon: Ionicons.add_circle_outline,
-          label: "Agregar a Playlist",
-          onTap: () {
-            Navigator.pop(context);
-            PlaylistActionService.showAddToPlaylistDialog(context, widget.song);
-          },
-        ),
-      ],
+      widget.song,
+      onFavoriteToggled: _onFavoriteToggled,
+      onEditSong: widget.onEditSong,
+      onSongDeleted: widget.onSongDeleted,
+      onMultiSelect: widget.onMultiSelect,
     );
   }
 
@@ -176,81 +129,203 @@ class _MobileSongItemState extends State<MobileSongItem>
     return RepaintBoundary(
       child: GestureDetector(
         onTap: widget.onTap,
+        onDoubleTap: widget.onDoubleTap,
         onLongPress: widget.onLongPress ?? () => _showOptions(context),
         child: FadeTransition(
           opacity: _fadeInController,
-          child: AnimatedBuilder(
-            animation: Listenable.merge([
-              _controller,
-              _shakeController,
-              _playingGlowController,
-            ]),
-            builder: (context, staticContent) {
-              double offsetX = 0;
-              if (_shakeController.isAnimating) {
-                offsetX =
-                    5.0 *
-                    (0.5 - (0.5 - _shakeController.value).abs()) *
-                    4 *
-                    (1 - _shakeController.value);
-                if (_shakeController.value > 0.5) offsetX = -offsetX;
-              }
-
-              Color? borderColor;
-              if (widget.isPlaying) {
-                borderColor = Colors.blueAccent;
-              } else if (widget.isAdo) {
-                borderColor = AppColors.themeBorder(mode);
-              }
-
-              List<BoxShadow> shadows = [];
-              if (widget.isAdo && widget.isGrid && !widget.isPlaying) {
-                final glowColor = AppColors.adoGlow(
-                  mode,
-                ).withOpacity(0.3 + (_controller.value * 0.3));
-                shadows.add(
-                  BoxShadow(color: glowColor, blurRadius: 10, spreadRadius: 1),
-                );
-              }
-              if (widget.isAdo && widget.isPlaying) {
-                final glowValue = 0.5 + (_playingGlowController.value * 0.5);
-                shadows.addAll([
-                  BoxShadow(
-                    color: Colors.blueAccent.withOpacity(0.7 * glowValue),
-                    blurRadius: 12.0,
-                    spreadRadius: 2.0,
+          child: SlideTransition(
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, 0.1),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: _fadeInController,
+                    curve: Curves.easeOutCubic,
                   ),
-                ]);
-              }
-
-              return Transform.translate(
-                offset: Offset(offsetX, 0),
-                child: Container(
-                  margin: widget.isGrid
-                      ? null
-                      : EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: AppColors.songItemGradient(mode),
-                    ),
-                    borderRadius: BorderRadius.circular(12.r),
-                    border: borderColor != null
-                        ? Border.all(
-                            color: borderColor,
-                            width: widget.isPlaying ? 2.0 : 1.5,
-                          )
-                        : null,
-                    boxShadow: shadows.isNotEmpty ? shadows : null,
-                  ),
-                  child: staticContent,
                 ),
-              );
-            },
-            child: widget.isGrid
-                ? _buildGridContent(mode)
-                : _buildListContent(mode),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                CurvedAnimation(
+                  parent: _fadeInController,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
+              child: AnimatedBuilder(
+                animation: Listenable.merge([
+                  _controller,
+                  _shakeController,
+                  _playingGlowController,
+                ]),
+                builder: (context, staticContent) {
+                  double offsetX = 0;
+                  if (_shakeController.isAnimating) {
+                    offsetX =
+                        5.0 *
+                        (0.5 - (0.5 - _shakeController.value).abs()) *
+                        4 *
+                        (1 - _shakeController.value);
+                    if (_shakeController.value > 0.5) offsetX = -offsetX;
+                  }
+
+                  final isHQ = AdoHandler.isHighQuality(widget.song);
+
+                  Gradient? borderGradient;
+                  Color? borderColor;
+                  double borderWidth = widget.isPlaying ? 2.0 : 1.5;
+
+                  if (widget.isSelected) {
+                    borderColor = Colors.blueAccent;
+                    borderWidth = 2.5.r;
+                  } else if (widget.isPlaying) {
+                    if (widget.isAdo && isHQ) {
+                      borderGradient = const LinearGradient(
+                        colors: [Colors.blueAccent, Color(0xFFFFD700)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        stops: [0.4, 1.0],
+                      );
+                    } else if (!widget.isAdo && isHQ) {
+                      borderColor = const Color(0xFFFFD700);
+                    } else {
+                      borderColor = Colors.blueAccent;
+                    }
+                  } else {
+                    if (widget.isAdo && isHQ) {
+                      borderGradient = LinearGradient(
+                        colors: [
+                          AppColors.themeBorder(mode),
+                          const Color(0xFFFFD700),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        stops: const [0.4, 1.0],
+                      );
+                    } else if (widget.isAdo && !isHQ) {
+                      borderColor = AppColors.themeBorder(mode);
+                    } else if (!widget.isAdo && isHQ) {
+                      borderColor = const Color(0xFFFFD700);
+                    }
+                  }
+
+                  List<BoxShadow> shadows = [];
+                  if (widget.isAdo && widget.isGrid && !widget.isPlaying) {
+                    final glowColor = isHQ
+                        ? const Color(
+                            0xFFFFD700,
+                          ).withOpacity(0.3 + (_controller.value * 0.3))
+                        : AppColors.adoGlow(
+                            mode,
+                          ).withOpacity(0.3 + (_controller.value * 0.3));
+
+                    shadows.add(
+                      BoxShadow(
+                        color: glowColor,
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    );
+                  }
+                  if (widget.isAdo && widget.isPlaying) {
+                    final glowValue =
+                        0.5 + (_playingGlowController.value * 0.5);
+                    final glowColor = isHQ
+                        ? const Color(0xFFFFD700)
+                        : Colors.blueAccent;
+                    shadows.addAll([
+                      BoxShadow(
+                        color: glowColor.withOpacity(0.7 * glowValue),
+                        blurRadius: 12.0,
+                        spreadRadius: 2.0,
+                      ),
+                    ]);
+                  }
+
+                  Widget itemContainer;
+
+                  if (borderGradient != null) {
+                    itemContainer = Container(
+                      margin: widget.isGrid
+                          ? null
+                          : EdgeInsets.symmetric(
+                              horizontal: 16.w,
+                              vertical: 4.h,
+                            ),
+                      padding: EdgeInsets.all(borderWidth),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12.r),
+                        gradient: borderGradient,
+                        boxShadow: shadows.isNotEmpty ? shadows : null,
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(
+                            12.r - borderWidth,
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: AppColors.songItemGradient(mode),
+                          ),
+                        ),
+                        child: staticContent,
+                      ),
+                    );
+                  } else {
+                    itemContainer = Container(
+                      margin: widget.isGrid
+                          ? null
+                          : EdgeInsets.symmetric(
+                              horizontal: 16.w,
+                              vertical: 4.h,
+                            ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: AppColors.songItemGradient(mode),
+                        ),
+                        borderRadius: BorderRadius.circular(12.r),
+                        border: borderColor != null
+                            ? Border.all(color: borderColor, width: borderWidth)
+                            : null,
+                        boxShadow: shadows.isNotEmpty ? shadows : null,
+                      ),
+                      child: staticContent,
+                    );
+                  }
+
+                  return Transform.translate(
+                    offset: Offset(offsetX, 0),
+                    child: Stack(
+                      children: [
+                        itemContainer,
+                        if (widget.isSelected)
+                          Positioned(
+                            top: 8.r,
+                            right: 8.r,
+                            child: Container(
+                              padding: EdgeInsets.all(4.r),
+                              decoration: const BoxDecoration(
+                                color: Colors.blueAccent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Ionicons.checkmark,
+                                color: Colors.white,
+                                size: widget.isGrid ? 14.r : 18.r,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+                child: widget.isGrid
+                    ? _buildGridContent(mode)
+                    : _buildListContent(mode),
+              ),
+            ),
           ),
         ),
       ),
@@ -263,9 +338,7 @@ class _MobileSongItemState extends State<MobileSongItem>
       children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(12.r),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(12.r)),
             child: widget.song.artwork != null
                 ? Image.memory(
                     widget.song.artwork!,
@@ -294,7 +367,7 @@ class _MobileSongItemState extends State<MobileSongItem>
                       ? Colors.blueAccent
                       : AppColors.textPrimary(mode),
                   fontWeight: FontWeight.bold,
-                  fontSize: 12.sp,
+                  fontSize: 11.sp,
                 ),
               ),
               Text(
@@ -303,7 +376,7 @@ class _MobileSongItemState extends State<MobileSongItem>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: AppColors.textSecondary(mode),
-                  fontSize: 10.sp,
+                  fontSize: 9.sp,
                 ),
               ),
             ],
@@ -332,10 +405,7 @@ class _MobileSongItemState extends State<MobileSongItem>
                     height: 64.r,
                     color: AppColors.imagePlaceholder(mode),
                     child: Center(
-                      child: Image.asset(
-                        'assets/MG-I-T.png',
-                        width: 38.r,
-                      ),
+                      child: Image.asset('assets/MG-I-T.png', width: 38.r),
                     ),
                   ),
           ),
@@ -354,7 +424,7 @@ class _MobileSongItemState extends State<MobileSongItem>
                       ? Colors.blueAccent
                       : AppColors.textPrimary(mode),
                   fontWeight: FontWeight.bold,
-                  fontSize: 14.sp,
+                  fontSize: 13.sp,
                 ),
               ),
               Text(
@@ -363,17 +433,14 @@ class _MobileSongItemState extends State<MobileSongItem>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: AppColors.textSecondary(mode),
-                  fontSize: 12.sp,
+                  fontSize: 11.sp,
                 ),
               ),
             ],
           ),
         ),
         IconButton(
-          icon: Icon(
-            Ionicons.ellipsis_vertical,
-            color: AppColors.icon(mode),
-          ),
+          icon: Icon(Ionicons.ellipsis_vertical, color: AppColors.icon(mode)),
           onPressed: () => _showOptions(context),
           splashRadius: 20.r,
         ),

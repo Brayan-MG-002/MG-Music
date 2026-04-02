@@ -1,12 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permisos base -->
+
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- Audio / almacenamiento -->
+
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -15,18 +15,18 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
 
-    <!-- Notificaciones -->
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    <!-- Foreground service para musica -->
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
 
-    <!-- Permisos extras -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
-    <!-- TV -->
+
     <uses-feature android:name="android.software.leanback" android:required="false"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
 
@@ -43,8 +43,7 @@
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:supportsPictureInPicture="true">
+            android:hardwareAccelerated="true">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -62,18 +61,19 @@
             android:name="flutterEmbedding"
             android:value="2"/>
 
-        <!-- SERVICIO DE AUDIO -->
+
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true"
+            android:stopWithTask="false"
             tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
         </service>
 
-        <!-- BOTONES MULTIMEDIA -->
+
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"
@@ -83,18 +83,20 @@
             </intent-filter>
         </receiver>
 
-        <!-- Custom notification action receiver -->
-        <receiver
-            android:name="com.mgstu.music.NotificationReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="MG_ACTION_PREV" />
-                <action android:name="MG_ACTION_PLAY_PAUSE" />
-                <action android:name="MG_ACTION_NEXT" />
-                <action android:name="MG_ACTION_FAVORITE" />
-                <action android:name="MG_ACTION_STOP" />
-            </intent-filter>
-        </receiver>
+
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.mgstu.music.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PATHS"
+                android:resource="@xml/file_paths" />
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 </manifest>

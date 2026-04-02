@@ -19,28 +19,24 @@ class StateManager {
   bool get showVisualizer => _showVisualizer;
   bool get hasStartupExecuted => _hasStartupExecuted;
 
-  /// Carga preferencias de inicio y visualizador
   Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     _startupMode = prefs.getString(_prefStartupMode) ?? startupAdo;
     _showVisualizer = prefs.getBool('show_visualizer') ?? true;
   }
 
-  /// Establece y guarda el modo de inicio
   Future<void> setStartupMode(String mode) async {
     _startupMode = mode;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefStartupMode, mode);
   }
 
-  /// Activa/desactiva el visualizador
   Future<void> toggleVisualizer(bool value) async {
     _showVisualizer = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('show_visualizer', value);
   }
 
-  /// Obtiene canción inicial según preferencias
   Future<Map<String, dynamic>?> getStartupSong(List<LocalSong> allSongs) async {
     if (_hasStartupExecuted) return null;
     _hasStartupExecuted = true;
@@ -74,7 +70,6 @@ class StateManager {
     return null;
   }
 
-  /// Guarda la posición actual de reproducción
   Future<void> savePosition(Duration position) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -82,7 +77,6 @@ class StateManager {
     } catch (e) {}
   }
 
-  /// Guarda la posición vinculada a una pista específica
   Future<void> savePositionFor(LocalSong song, Duration position) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -90,7 +84,6 @@ class StateManager {
     } catch (e) {}
   }
 
-  /// Guarda la canción actual (posición se guarda aparte)
   Future<void> saveLastPlayedSong(LocalSong song) async {
     try {
       final prefs = await SharedPreferences.getInstance();

@@ -1,12 +1,11 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Widgets reutilizables de la configuración TV
+// Componentes visuales reutilizables para la interfaz de ajustes en TV, incluyendo filas, selectores e interruptores enfocables.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 
-/// Título de sección en la página de ajustes TV
 class TvSettingsSectionTitle extends StatelessWidget {
   final String title;
   final AppThemeMode mode;
@@ -18,7 +17,6 @@ class TvSettingsSectionTitle extends StatelessWidget {
   });
 
   @override
-  /// Construye el título de sección
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 28, bottom: 14),
@@ -27,7 +25,7 @@ class TvSettingsSectionTitle extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.primaryBlueMid,
               fontWeight: FontWeight.bold,
               fontSize: 20,
@@ -54,7 +52,6 @@ class TvSettingsSectionTitle extends StatelessWidget {
   }
 }
 
-/// Tile de acción de configuración (botón con flecha)
 class TvSettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -63,6 +60,7 @@ class TvSettingsTile extends StatelessWidget {
   final AppThemeMode mode;
   final bool isActive;
   final bool disabled;
+  final bool badge;
 
   const TvSettingsTile({
     super.key,
@@ -73,95 +71,118 @@ class TvSettingsTile extends StatelessWidget {
     required this.mode,
     this.isActive = false,
     this.disabled = false,
+    this.badge = false,
   });
 
   @override
-  /// Construye un tile de acción
   Widget build(BuildContext context) {
     return Opacity(
       opacity: disabled ? 0.4 : 1.0,
       child: TvFocusableItem(
         onTap: disabled ? null : onTap,
         borderRadius: 20,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isActive ? Colors.blue : AppColors.themeBorder(mode),
-              width: 2,
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                isActive
-                    ? Colors.blue.shade900.withOpacity(0.6)
-                    : AppColors.primaryBlueMid.withOpacity(0.2),
-                AppColors.surface(mode).withOpacity(0.0),
-              ],
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        child: Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isActive ? AppColors.primaryBlueMid : AppColors.themeBorder(mode),
+                  width: 2,
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    isActive
+                        ? AppColors.primaryBlue.withOpacity(0.6)
+                        : AppColors.primaryBlueMid.withOpacity(0.2),
+                    AppColors.surface(mode).withOpacity(0.0),
+                  ],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: mode == AppThemeMode.dark
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.white.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      icon,
-                      color: isActive
-                          ? Colors.blue
-                          : AppColors.textPrimary(mode),
-                      size: 22,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: mode == AppThemeMode.dark
+                              ? Colors.black.withOpacity(0.3)
+                              : Colors.white.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          icon,
+                          color: isActive
+                              ? AppColors.primaryBlueMid
+                              : AppColors.textPrimary(mode),
+                          size: 22,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (!disabled)
+                        Icon(
+                          Ionicons.chevron_forward,
+                          color: AppColors.primaryBlueMid,
+                          size: 16,
+                        ),
+                    ],
                   ),
-                  const Spacer(),
-                  if (!disabled)
-                    Icon(
-                      Ionicons.chevron_forward,
-                      color: AppColors.primaryBlueMid,
-                      size: 16,
+                  const SizedBox(height: 10),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: AppColors.textPrimary(mode),
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: AppColors.textSecondary(mode),
+                      fontSize: 12,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: TextStyle(
-                  color: AppColors.textPrimary(mode),
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
+            ),
+            if (badge)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: AppColors.textSecondary(mode),
-                  fontSize: 12,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Tile de switch (toggle ON/OFF)
 class TvSettingsSwitchTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -181,7 +202,6 @@ class TvSettingsSwitchTile extends StatelessWidget {
   });
 
   @override
-  /// Construye un tile con interruptor
   Widget build(BuildContext context) {
     return TvFocusableItem(
       onTap: () => onChanged(!value),
@@ -223,7 +243,7 @@ class TvSettingsSwitchTile extends StatelessWidget {
                 Switch(
                   value: value,
                   onChanged: onChanged,
-                  activeColor: Colors.blue.shade700,
+                  activeColor: AppColors.primaryBlueMid,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ],
@@ -256,7 +276,6 @@ class TvSettingsSwitchTile extends StatelessWidget {
   }
 }
 
-/// Grid de 2 columnas para un par de tiles de ajustes TV
 class TvSettingsRow extends StatelessWidget {
   final Widget left;
   final Widget right;
@@ -264,7 +283,6 @@ class TvSettingsRow extends StatelessWidget {
   const TvSettingsRow({super.key, required this.left, required this.right});
 
   @override
-  /// Construye una fila de 2 columnas para ajustes
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -280,14 +298,12 @@ class TvSettingsRow extends StatelessWidget {
   }
 }
 
-/// Widget de un solo tile que ocupa todo el ancho (para el AdoBoost, tema, etc.)
 class TvSettingsFullRow extends StatelessWidget {
   final Widget child;
 
   const TvSettingsFullRow({super.key, required this.child});
 
   @override
-  /// Construye un contenedor de ancho completo
   Widget build(BuildContext context) {
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: child);
   }

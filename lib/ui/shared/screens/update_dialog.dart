@@ -1,17 +1,16 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Diálogo de actualización disponible
+// Diálogo personalizado para informar sobre nuevas actualizaciones disponibles, con soporte para Mobile y TV.
 
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mg_music/services/models/version_model.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/ui/shared/screens/update_screen.dart';
+import 'package:mg_music/ui/tv/tv_focusable_item.dart';
 
-/// Diálogo que muestra información de actualización disponible
 class UpdateDialog extends StatefulWidget {
   final VersionModel versionData;
   final bool isTv;
@@ -36,41 +35,8 @@ class _UpdateDialogState extends State<UpdateDialog>
 
   AnimationController? _glowController;
 
-  /// Abre la URL en el navegador
-  Future<void> _launchURL() async {
-    try {
-      final url = widget.versionData.websiteUrl;
-      if (kDebugMode) print('Intentando abrir URL: $url');
-
-      final uri = Uri.parse(url);
-
-      try {
-        await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
-        if (kDebugMode) print('URL lanzada con inAppBrowserView');
-      } catch (e) {
-        if (kDebugMode) print('Error con inAppBrowserView: $e');
-        try {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-          if (kDebugMode) print('URL lanzada con externalApplication');
-        } catch (e2) {
-          if (kDebugMode) print('Error con externalApplication: $e2');
-          try {
-            await launchUrl(uri, mode: LaunchMode.platformDefault);
-            if (kDebugMode) print('URL lanzada con platformDefault');
-          } catch (e3) {
-            if (kDebugMode) print('Error con platformDefault: $e3');
-            await launchUrl(uri);
-            if (kDebugMode) print('URL lanzada sin modo específico');
-          }
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) print('Error abriendo URL: $e');
-    }
-  }
 
   @override
-  /// Inicializa controladores de animación y pulso crítico
   void initState() {
     super.initState();
 
@@ -98,7 +64,6 @@ class _UpdateDialogState extends State<UpdateDialog>
   }
 
   @override
-  /// Libera recursos de animación
   void dispose() {
     _entryController.dispose();
     _glowController?.dispose();
@@ -149,7 +114,6 @@ class _UpdateDialogState extends State<UpdateDialog>
   }
 
   @override
-  /// Construye el diálogo de actualización con animaciones y acciones
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     final importanceColor = _getImportanceColor();
@@ -167,8 +131,8 @@ class _UpdateDialogState extends State<UpdateDialog>
             List<BoxShadow> shadows = [
               BoxShadow(
                 color: AppColors.themeBorder(mode).withOpacity(0.4),
-                blurRadius: 20,
-                spreadRadius: 2,
+                blurRadius: 15.r,
+                spreadRadius: 1.r,
               ),
             ];
             if (_glowController != null) {
@@ -176,8 +140,8 @@ class _UpdateDialogState extends State<UpdateDialog>
               shadows.add(
                 BoxShadow(
                   color: Colors.red.withOpacity(0.5 * glowValue),
-                  blurRadius: 30,
-                  spreadRadius: 4,
+                  blurRadius: 20.r,
+                  spreadRadius: 2.r,
                 ),
               );
             }
@@ -188,12 +152,12 @@ class _UpdateDialogState extends State<UpdateDialog>
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(20.r),
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                     child: Container(
                       constraints: BoxConstraints(
-                        maxWidth: widget.isTv ? 800 : 500,
+                        maxWidth: widget.isTv ? 800.w : 420.w,
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.background(mode),
@@ -206,16 +170,16 @@ class _UpdateDialogState extends State<UpdateDialog>
                           ],
                           stops: const [0.0, 0.7],
                         ),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(20.r),
                         border: Border.all(
                           color: AppColors.themeBorder(mode),
-                          width: 2,
+                          width: 1.5.w,
                         ),
                         boxShadow: shadows,
                       ),
                       child: SingleChildScrollView(
                         child: Padding(
-                          padding: EdgeInsets.all(widget.isTv ? 32.0 : 24.0),
+                          padding: EdgeInsets.all(widget.isTv ? 32.r : 20.r),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,9 +189,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                                   Icon(
                                     importanceIcon,
                                     color: importanceColor,
-                                    size: widget.isTv ? 32 : 24,
+                                    size: widget.isTv ? 32.r : 22.r,
                                   ),
-                                  SizedBox(width: widget.isTv ? 16 : 12),
+                                  SizedBox(width: widget.isTv ? 16.w : 12.w),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -245,8 +209,8 @@ class _UpdateDialogState extends State<UpdateDialog>
                                                   mode,
                                                 ),
                                                 fontSize: widget.isTv
-                                                    ? 24
-                                                    : null,
+                                                    ? 24.sp
+                                                    : 16.sp,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                         ),
@@ -259,8 +223,8 @@ class _UpdateDialogState extends State<UpdateDialog>
                                               ?.copyWith(
                                                 color: importanceColor,
                                                 fontSize: widget.isTv
-                                                    ? 16
-                                                    : null,
+                                                    ? 16.sp
+                                                    : 11.sp,
                                               ),
                                         ),
                                       ],
@@ -268,29 +232,30 @@ class _UpdateDialogState extends State<UpdateDialog>
                                   ),
                                 ],
                               ),
-                              SizedBox(height: widget.isTv ? 28 : 20),
+                              SizedBox(height: widget.isTv ? 24.h : 18.h),
                               Text(
                                 widget.versionData.title,
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
                                       color: AppColors.textPrimary(mode),
                                       fontWeight: FontWeight.w600,
-                                      fontSize: widget.isTv ? 20 : null,
+                                      fontSize: widget.isTv ? 20.sp : 15.sp,
                                     ),
                               ),
-                              SizedBox(height: widget.isTv ? 20 : 16),
+                              SizedBox(height: widget.isTv ? 20.h : 16.h),
                               if (widget.versionData.changelog.isNotEmpty)
                                 Container(
                                   padding: EdgeInsets.all(
-                                    widget.isTv ? 16 : 12,
+                                    widget.isTv ? 16.r : 12.r,
                                   ),
                                   decoration: BoxDecoration(
                                     color: AppColors.surface(mode),
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12.r),
                                     border: Border.all(
                                       color: AppColors.themeBorder(
                                         mode,
                                       ).withOpacity(0.2),
+                                      width: 1.w,
                                     ),
                                   ),
                                   child: Text(
@@ -300,39 +265,39 @@ class _UpdateDialogState extends State<UpdateDialog>
                                         .bodyMedium
                                         ?.copyWith(
                                           color: AppColors.textSecondary(mode),
-                                          height: 1.5,
-                                          fontSize: widget.isTv ? 16 : null,
+                                          height: 1.4,
+                                          fontSize: widget.isTv ? 16.sp : 13.sp,
                                         ),
                                   ),
                                 ),
                               if (widget.versionData.changelog.isNotEmpty)
-                                SizedBox(height: widget.isTv ? 28 : 20),
-                              SizedBox(height: widget.isTv ? 16 : 8),
+                                SizedBox(height: widget.isTv ? 24.h : 18.h),
+                              SizedBox(height: widget.isTv ? 12.h : 4.h),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceEvenly,
                                 children: [
-                                  if (!widget.versionData.forceUpdate)
                                     Expanded(
                                       child: _NeonButton(
                                         label: 'Ahora no',
                                         onPressed: () async {
-                                          if (widget.isBeta) {
-                                            try {
-                                              final prefs =
-                                                  await SharedPreferences
-                                                      .getInstance();
+                                          try {
+                                            final prefs = await SharedPreferences.getInstance();
+                                            if (widget.isBeta) {
                                               await prefs.setInt(
                                                 'ignored_beta_version_code',
                                                 widget.versionData.versionCode,
                                               );
-                                            } catch (e) {
-                                              debugPrint(
-                                                'Error al guardar ignorado: $e',
-                                              );
                                             }
-                                          }
-                                          Navigator.pop(context);
+                                            // Snooze 2 días + marcar actualización pendiente
+                                            final until = DateTime.now()
+                                                .add(const Duration(days: 2))
+                                                .millisecondsSinceEpoch;
+                                            await prefs.setInt('update_snoozed_until', until);
+                                            await prefs.setInt('snoozed_version_code', widget.versionData.versionCode);
+                                            await prefs.setInt('pending_update_version_code', widget.versionData.versionCode);
+                                          } catch (e) {}
+                                          if (context.mounted) Navigator.pop(context);
                                         },
                                         color: Colors.grey,
                                         isTv: widget.isTv,
@@ -340,18 +305,25 @@ class _UpdateDialogState extends State<UpdateDialog>
                                       ),
                                     ),
                                   if (!widget.versionData.forceUpdate)
-                                    SizedBox(width: widget.isTv ? 16 : 12),
+                                    SizedBox(width: widget.isTv ? 16.w : 12.w),
                                   Expanded(
                                     child: _NeonButton(
                                       label: 'Actualizar',
-                                      onPressed: () async {
-                                        await _launchURL();
-                                        if (Navigator.canPop(context)) {
-                                          Navigator.pop(context);
-                                        }
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => UpdateScreen(
+                                              versionData: widget.versionData,
+                                              isTv: widget.isTv,
+                                            ),
+                                            fullscreenDialog: true,
+                                          ),
+                                        );
                                       },
                                       color: importanceColor,
                                       isTv: widget.isTv,
+                                      autofocus: widget.isTv,
                                       mode: mode,
                                     ),
                                   ),
@@ -373,12 +345,12 @@ class _UpdateDialogState extends State<UpdateDialog>
   }
 }
 
-/// Botón personalizado con estilo neón y degradado
 class _NeonButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
   final Color color;
   final bool isTv;
+  final bool autofocus;
   final AppThemeMode mode;
 
   const _NeonButton({
@@ -387,31 +359,32 @@ class _NeonButton extends StatelessWidget {
     required this.color,
     required this.mode,
     this.isTv = false,
+    this.autofocus = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final Widget buttonContent = Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [color.withOpacity(0.6), AppColors.background(mode)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(30.r),
+        border: Border.all(color: color, width: 1.w),
         boxShadow: [
           BoxShadow(
             color: color.withOpacity(0.5),
-            blurRadius: 10,
-            spreadRadius: 1,
+            blurRadius: 10.r,
+            spreadRadius: 1.r,
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(30.r),
           onTap: onPressed,
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: isTv ? 16 : 12),
@@ -421,7 +394,7 @@ class _NeonButton extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: isTv ? 16 : null,
+                  fontSize: isTv ? 16.sp : 13.sp,
                 ),
               ),
             ),
@@ -429,5 +402,16 @@ class _NeonButton extends StatelessWidget {
         ),
       ),
     );
+
+    if (isTv) {
+      return TvFocusableItem(
+        onTap: onPressed,
+        autofocus: autofocus,
+        borderRadius: 30.r,
+        child: buttonContent,
+      );
+    }
+
+    return buttonContent;
   }
 }

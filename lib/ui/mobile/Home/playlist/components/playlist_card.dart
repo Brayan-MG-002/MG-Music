@@ -6,6 +6,7 @@ import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/models/song_model.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class PlaylistCard extends StatelessWidget {
   final String name;
@@ -26,7 +27,6 @@ class PlaylistCard extends StatelessWidget {
   });
 
   @override
-  /// Construye la tarjeta de playlist con imagen o ícono y textos
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
@@ -41,7 +41,7 @@ class PlaylistCard extends StatelessWidget {
               onTap: onTap,
               onLongPress: onLongPress,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(15.r),
                 child: Stack(
                   alignment: Alignment.bottomLeft,
                   children: [
@@ -67,7 +67,7 @@ class PlaylistCard extends StatelessWidget {
                             ),
                             child: Icon(
                               Ionicons.musical_notes,
-                              size: 50,
+                              size: 50.r,
                               color: AppColors.textSecondary(
                                 mode,
                               ).withOpacity(0.5),
@@ -92,7 +92,7 @@ class PlaylistCard extends StatelessWidget {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(12.0),
+                      padding: EdgeInsets.all(12.0.r),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +102,7 @@ class PlaylistCard extends StatelessWidget {
                             style: TextStyle(
                               color: AppColors.textPrimary(mode),
                               fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                              fontSize: 16.sp,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -111,7 +111,7 @@ class PlaylistCard extends StatelessWidget {
                             '$songCount canciones',
                             style: TextStyle(
                               color: AppColors.textSecondary(mode),
-                              fontSize: 12,
+                              fontSize: 12.sp,
                             ),
                           ),
                         ],

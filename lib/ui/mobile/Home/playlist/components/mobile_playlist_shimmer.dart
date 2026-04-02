@@ -17,7 +17,6 @@ class _MobilePlaylistShimmerState extends State<MobilePlaylistShimmer>
   late AnimationController _controller;
 
   @override
-  /// Inicializa controlador del shimmer
   void initState() {
     super.initState();
     _controller = AnimationController(
@@ -27,14 +26,12 @@ class _MobilePlaylistShimmerState extends State<MobilePlaylistShimmer>
   }
 
   @override
-  /// Libera el controlador
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
   @override
-  /// Construye shimmer en grilla o lista
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
@@ -49,7 +46,7 @@ class _MobilePlaylistShimmerState extends State<MobilePlaylistShimmer>
     );
   }
 
-  /// Construye shimmer en grilla
+
   Widget _buildGrid(AppThemeMode mode) {
     return GridView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -81,7 +78,7 @@ class _MobilePlaylistShimmerState extends State<MobilePlaylistShimmer>
     );
   }
 
-  /// Construye shimmer en lista
+
   Widget _buildList(AppThemeMode mode) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),

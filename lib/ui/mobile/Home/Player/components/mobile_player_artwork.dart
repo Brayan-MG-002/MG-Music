@@ -23,76 +23,120 @@ class MobilePlayerArtwork extends StatelessWidget {
     if (ResponsiveService.isTablet) {
       baseSize = 320.0.r;
     } else {
-      // Interpolate between 155 and 245 based on height between 500 and 800
-      double hFactor = (screenHeight - 500) / (800 - 500);
+      // Interpolate between 120 and 245 based on height between 450 and 800
+      double hFactor = (screenHeight - 450) / (800 - 450);
       hFactor = hFactor.clamp(0.0, 1.0);
-      baseSize = 155.0 + (90.0 * hFactor);
+      baseSize = 120.0 + (125.0 * hFactor);
     }
 
     final size = baseSize.r;
 
+    final isHQ = AdoHandler.isHighQuality(song);
+    
+    Gradient? borderGradient;
+    Color? borderColor;
+    
+    if (isAdo && isHQ) {
+      borderGradient = LinearGradient(
+        colors: [AppColors.themeBorder(mode), const Color(0xFFFFD700)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        stops: const [0.4, 1.0], // Balance para que el dorado sea ~50% visual
+      );
+    } else if (isAdo && !isHQ) {
+      borderColor = AppColors.themeBorder(mode).withOpacity(0.3);
+    } else if (!isAdo && isHQ) {
+      borderColor = const Color(0xFFFFD700);
+    } else {
+      borderColor = AppColors.themeBorder(mode).withOpacity(0.3);
+    }
+
+    final shadowList = [
+      // Shadow Base
+      BoxShadow(
+        color: AppColors.themeBorder(mode).withOpacity(0.4),
+        blurRadius: 20.r,
+        spreadRadius: 2.r,
+        offset: Offset(0, 10.h),
+      ),
+    ];
+
+    if (isHQ) {
+      shadowList.add(
+        BoxShadow(
+          color: const Color(0xFFFFD700).withOpacity(0.3), // Brillo exclusivo para HQ
+          blurRadius: 35.r,
+          spreadRadius: 8.r,
+        ),
+      );
+    }
+
+    Widget innerArtwork = ClipRRect(
+      borderRadius: BorderRadius.circular(borderGradient != null ? 20.r - 1.5.r : 20.r),
+      child: song.artwork != null
+          ? Image.memory(
+              song.artwork!,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            )
+          : Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primaryBlueMid.withOpacity(0.7),
+                    mode == AppThemeMode.dark
+                        ? Colors.black
+                        : Colors.white,
+                  ],
+                  center: Alignment.center,
+                  radius: 0.8,
+                ),
+              ),
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(size * 0.15),
+                  child: Image.asset(
+                    'assets/MG-I-T.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+    );
+
+    Widget artworkContainer;
+    
+    if (borderGradient != null) {
+      artworkContainer = Container(
+        height: size,
+        width: size,
+        padding: EdgeInsets.all(1.5.r),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20.r),
+          gradient: borderGradient,
+          boxShadow: shadowList,
+        ),
+        child: innerArtwork,
+      );
+    } else {
+      artworkContainer = Container(
+        height: size,
+        width: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20.r),
+          border: Border.all(
+            color: borderColor!,
+            width: 1.5.r,
+          ),
+          boxShadow: shadowList,
+        ),
+        child: innerArtwork,
+      );
+    }
+
     return RepaintBoundary(
       child: Center(
-        child: Container(
-          height: size,
-          width: size,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20.r),
-            border: Border.all(
-              color: AppColors.themeBorder(mode).withOpacity(0.3),
-              width: 1.5.r,
-            ),
-            boxShadow: [
-              // Shadow Base
-              BoxShadow(
-                color: AppColors.themeBorder(mode).withOpacity(0.4),
-                blurRadius: 20.r,
-                spreadRadius: 2.r,
-                offset: Offset(0, 10.h),
-              ),
-              // Glow Ambient
-              BoxShadow(
-                color:
-                    (isAdo ? AppColors.adoGlow(mode) : AppColors.primaryBlueMid)
-                        .withOpacity(0.2),
-                blurRadius: 30.r,
-                spreadRadius: 5.r,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20.r),
-            child: song.artwork != null
-                ? Image.memory(
-                    song.artwork!,
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                  )
-                : Container(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        colors: [
-                          AppColors.primaryBlueMid.withOpacity(0.7),
-                          mode == AppThemeMode.dark
-                              ? Colors.black
-                              : Colors.white,
-                        ],
-                        center: Alignment.center,
-                        radius: 0.8,
-                      ),
-                    ),
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(size * 0.15),
-                        child: Image.asset(
-                          'assets/MG-I-T.png',
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-        ),
+        child: artworkContainer,
       ),
     );
   }

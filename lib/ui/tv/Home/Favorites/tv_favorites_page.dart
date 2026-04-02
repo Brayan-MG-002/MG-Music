@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Página de favoritos para TV
+// Página de gestión de canciones favoritas para la interfaz de TV, con soporte para modo de eliminación múltiple y opciones personalizadas.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
@@ -13,7 +13,6 @@ import 'package:mg_music/ui/tv/Home/Favorites/tv_favorites_top_bar.dart';
 import 'package:mg_music/ui/tv/Home/Home/tv_home_song_item.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:provider/provider.dart';
-import 'package:mg_music/ui/tv/Home/Home/tv_home_dialogs.dart';
 import 'package:mg_music/services/ui/global_modal_service.dart';
 import 'package:mg_music/services/ui/custom_toast_service.dart';
 import 'package:mg_music/services/ui/playlist_action_service.dart';
@@ -37,7 +36,6 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
   Set<String> _songsToRemove = <String>{};
 
   @override
-  /// Inicializa la página y suscriptores de favoritos
   void initState() {
     super.initState();
     _loadFavoriteSongs();
@@ -45,13 +43,11 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
   }
 
   @override
-  /// Limpia listeners al cerrar la página
   void dispose() {
     _favoritesManager.favoritePathsNotifier.removeListener(_loadFavoriteSongs);
     super.dispose();
   }
 
-  /// Carga y ordena las canciones favoritas
   Future<void> _loadFavoriteSongs() async {
     setState(() => _isLoading = true);
     final allSongs = await _songFetcher.getSongs();
@@ -78,7 +74,6 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
   }
 
   @override
-  /// Construye la UI de favoritos con barra y grilla
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     Widget content;
@@ -230,7 +225,6 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
     );
   }
 
-  /// Elimina los favoritos seleccionados con confirmación
   void _removeSelectedFavorites() {
     if (_songsToRemove.isEmpty) {
       CustomToastService.show(
@@ -267,8 +261,9 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
           continue;
         }
         final ok = await _favoritesManager.removeFavorite(song);
-        final stillFav =
-            _favoritesManager.getFavoritePaths().contains(song.path);
+        final stillFav = _favoritesManager.getFavoritePaths().contains(
+          song.path,
+        );
         if (ok && !stillFav) {
           removed++;
         } else if (!ok) {
@@ -307,35 +302,6 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
     });
   }
 
-  /// Construye un botón de acción estilizado
-  Widget _buildActionButton(
-    IconData icon,
-    String label,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
-    return TvFocusableItem(
-      onTap: onTap,
-      borderRadius: 8,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: (color ?? Colors.grey.shade800).withOpacity(0.8),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(color: Colors.white)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Construye una opción de acción para los diálogos
   Widget _buildDialogOption(
     IconData icon,
     String label,
@@ -361,8 +327,6 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
     );
   }
 
-
-  /// Muestra opciones para una canción favorita
   void _showFavoriteSongOptions(LocalSong song, AppThemeMode mode) {
     final isAdo = AdoHandler.isAdo(song);
     GlobalModalService.show(
@@ -373,34 +337,26 @@ class _TvFavoritesPageState extends State<TvFavoritesPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Reproducir siguiente
-          _buildDialogOption(
-            Ionicons.play_forward,
-            'Reproducir siguiente',
-            () {
-              AudioPlayerManager().addNext(song);
-              final ctx = GlobalModalService.navigatorKey.currentContext!;
-              Navigator.pop(ctx);
-              CustomToastService.show(
-                ctx,
-                message: 'Siguiente: ${song.title}',
-                type: ToastType.info,
-                icon: Ionicons.play_forward,
-              );
-            },
-          ),
+          _buildDialogOption(Ionicons.play_forward, 'Reproducir siguiente', () {
+            AudioPlayerManager().addNext(song);
+            final ctx = GlobalModalService.navigatorKey.currentContext!;
+            Navigator.pop(ctx);
+            CustomToastService.show(
+              ctx,
+              message: 'Siguiente: ${song.title}',
+              type: ToastType.info,
+              icon: Ionicons.play_forward,
+            );
+          }),
           const SizedBox(height: 4),
           // Añadir a Playlist (servicio central)
-          _buildDialogOption(
-            Ionicons.list,
-            'Añadir a Playlist',
-            () {
-              Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
-              PlaylistActionService.showAddToPlaylistDialog(
-                GlobalModalService.navigatorKey.currentContext!,
-                song,
-              );
-            },
-          ),
+          _buildDialogOption(Ionicons.list, 'Añadir a Playlist', () {
+            Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
+            PlaylistActionService.showAddToPlaylistDialog(
+              GlobalModalService.navigatorKey.currentContext!,
+              song,
+            );
+          }),
           const SizedBox(height: 4),
           // Establecer como principal
           _buildDialogOption(

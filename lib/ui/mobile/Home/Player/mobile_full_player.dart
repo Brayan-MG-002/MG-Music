@@ -13,6 +13,9 @@ import 'components/mobile_player_actions.dart';
 import 'components/mobile_player_controls.dart';
 import 'components/sleep_timer_badge.dart';
 import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/services/audio/ado_handler.dart';
+import 'package:mg_music/services/ui/ado_experience_service.dart';
+import 'mobile_special_player.dart';
 
 class MobileFullPlayer extends StatefulWidget {
   const MobileFullPlayer({super.key});
@@ -72,6 +75,13 @@ class _MobileFullPlayerState extends State<MobileFullPlayer> {
   /// Construye el reproductor a pantalla completa
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
+    final currentSong = manager.currentSongNotifier.value;
+    final isAdo = currentSong != null && AdoHandler.isAdo(currentSong);
+    final specialEnabled = AdoExperienceService().dedicatedPlayerEnabled;
+
+    if (isAdo && specialEnabled) {
+      return const MobileSpecialPlayer();
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,

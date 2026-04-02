@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Pantalla de splash y detección de dispositivo
+// Pantalla de splash: inicialización de la app, detección de dispositivo y verificación de actualizaciones.
 
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -10,11 +10,15 @@ import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/ui/mobile/mobile_main_screen.dart';
 import 'package:mg_music/ui/shared/permissions_screen.dart';
 import 'package:mg_music/ui/tv/tv_main_screen.dart';
-import 'package:mg_music/services/logic/update_service.dart';
-import 'package:mg_music/ui/shared/screens/update_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:mg_music/services/ui/animated_theme_switcher.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/services/logic/update_service.dart';
+import 'package:mg_music/ui/shared/screens/update_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+enum DeviceType { mobile, tv }
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -24,23 +28,18 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  bool _isTv = false;
   bool _isExiting = false;
 
   @override
-  /// Inicializa el splash y arranca la navegación
   void initState() {
     super.initState();
     _initializeAndNavigate();
   }
 
-  /// Inicializa y navega a la pantalla adecuada
   Future<void> _initializeAndNavigate() async {
-    // Timeout de seguridad: Si después de 8 segundos no hemos navegado, forzar navegación
     bool navigated = false;
-    Future.delayed(const Duration(seconds: 8), () {
+    Future.delayed(const Duration(seconds: 20), () {
       if (mounted && !navigated) {
-        debugPrint('⏱️ Splash safety timeout disparado. Forzando navegación.');
         _forceNavigate();
       }
     });
@@ -48,31 +47,33 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    final isTv = await _detectDeviceType().timeout(
+    final deviceType = await _detectDeviceType().timeout(
       const Duration(seconds: 3),
-      onTimeout: () => false, // Asumir mobile si hay timeout
+      onTimeout: () => DeviceType.mobile,
     );
     if (!mounted) return;
 
+    final isTv = deviceType == DeviceType.tv;
+
     try {
-      if (isTv) {
-        await SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]).timeout(const Duration(seconds: 2));
-      } else {
-        await SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-        ]).timeout(const Duration(seconds: 2));
+      if (Platform.isAndroid) {
+        if (isTv) {
+          await SystemChrome.setPreferredOrientations([
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]).timeout(const Duration(seconds: 2));
+        } else {
+          await SystemChrome.setPreferredOrientations([
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+          ]).timeout(const Duration(seconds: 2));
+        }
       }
-    } catch (e) {
-      debugPrint('⚠️ Error configurando orientación: $e');
-    }
+    } catch (e) {}
 
     final allGranted = await PermissionsScreen.checkAllPermissions(isTv).timeout(
       const Duration(seconds: 4),
-      onTimeout: () => false, // Forzar pantalla de permisos si hay duda
+      onTimeout: () => false,
     );
     if (!mounted) return;
 
@@ -84,79 +85,91 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
+    // Comprobar actualizaciones antes de entrar al Main
+    try {
+      final info = await UpdateService.checkForUpdate();
+      if (info['hasUpdate']) {
+        final prefs = await SharedPreferences.getInstance();
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final snoozedUntil = prefs.getInt('update_snoozed_until') ?? 0;
+        final snoozedCode = prefs.getInt('snoozed_version_code') ?? 0;
+        final data = info['data'] as dynamic;
+        final remoteCode = (data?.versionCode as int?) ?? 0;
+
+        // Solo mostrar si no está pospuesto o es una versión distinta a la pospuesta
+        if (now >= snoozedUntil || snoozedCode != remoteCode) {
+          navigated = true;
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => UpdateScreen(
+                  versionData: info['data'],
+                  isTv: isTv,
+                ),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    } catch (e) {}
+
     setState(() => _isExiting = true);
 
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
 
     navigated = true;
-    _isTv = isTv;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation1, animation2) => _buildMainApp(isTv),
+        pageBuilder: (context, animation1, animation2) =>
+            _buildMainApp(deviceType),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
     );
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _checkForUpdates();
-    });
   }
 
-  /// Navegación de emergencia si todo lo demás falla
   void _forceNavigate() {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const MobileMainScreen()),
+      MaterialPageRoute(
+        builder: (context) => const MobileMainScreen(),
+      ),
     );
   }
 
-  /// Detecta si el dispositivo es TV o PC
-  Future<bool> _detectDeviceType() async {
-    if (Platform.isWindows || Platform.isLinux) return true;
-    if (!Platform.isAndroid) return false;
+  Future<DeviceType> _detectDeviceType() async {
+    if (Platform.isLinux) return DeviceType.tv;
+    if (!Platform.isAndroid) return DeviceType.mobile;
 
     try {
       final deviceInfo = await DeviceInfoPlugin().androidInfo;
-      return deviceInfo.systemFeatures.contains('android.software.leanback') ||
+      final isTv =
+          deviceInfo.systemFeatures.contains('android.software.leanback') ||
           deviceInfo.systemFeatures.contains(
             'android.hardware.type.television',
           );
+      return isTv ? DeviceType.tv : DeviceType.mobile;
     } catch (_) {
-      return false;
+      return DeviceType.mobile;
     }
   }
 
-  /// Verifica si hay actualizaciones disponibles
-  Future<void> _checkForUpdates() async {
-    final updateInfo = await UpdateService.checkForUpdate(isTv: _isTv);
 
-    if (updateInfo['hasUpdate'] && mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => UpdateDialog(
-          versionData: updateInfo['data'],
-          isTv: _isTv,
-          isBeta: updateInfo['isBeta'] ?? false,
-        ),
-      );
-    }
-  }
 
-  /// Construye la app principal con tema
-  Widget _buildMainApp(bool isTv) {
-    _isTv = isTv;
-
+  Widget _buildMainApp(DeviceType deviceType) {
     return AnimatedThemeSwitcher(
-      child: isTv ? const TvMainScreen() : const MobileMainScreen(),
+      child: switch (deviceType) {
+        DeviceType.tv => const TvMainScreen(),
+        DeviceType.mobile => const MobileMainScreen(),
+      },
     );
   }
 
   @override
-  /// Construye la UI del splash
   Widget build(BuildContext context) {
+    ResponsiveService.init(context);
     final mode = context.watch<ThemeService>().mode;
 
     return Scaffold(
@@ -192,7 +205,15 @@ class _SplashScreenState extends State<SplashScreen> {
                       verticalOffset: 50.0,
                       child: ScaleAnimation(
                         child: FadeInAnimation(
-                          child: Image.asset('assets/MG-I-T.png', width: 250),
+                          child: Image.asset(
+                            'assets/MG-I-T.png',
+                            width: 250.r,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.music_note_rounded,
+                              size: 140.r,
+                              color: AppColors.primaryBlueMid,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -212,7 +233,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           "Inspirada en ",
                           style: TextStyle(
                             color: AppColors.textSecondary(mode),
-                            fontSize: 18,
+                            fontSize: 18.sp,
                             fontStyle: FontStyle.italic,
                           ),
                         ),
@@ -221,7 +242,7 @@ class _SplashScreenState extends State<SplashScreen> {
                             "Ado",
                             style: TextStyle(
                               color: AppColors.primaryBlueMid,
-                              fontSize: 22,
+                              fontSize: 22.sp,
                               fontWeight: FontWeight.bold,
                               fontStyle: FontStyle.italic,
                             ),

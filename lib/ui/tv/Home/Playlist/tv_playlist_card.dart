@@ -1,4 +1,5 @@
-// Tarjeta de playlist en la grilla de TV
+// Copyright © 2026 Brayan Medrano - MG Music
+// Tarjeta visual para las listas de reproducción en la interfaz de TV, con soporte para carátulas dinámicas y estados de foco.
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/services/logic/playlist_manager.dart';
@@ -30,7 +31,6 @@ class TvPlaylistCard extends StatelessWidget {
   }
 
   @override
-  /// Construye la tarjeta mostrando portada o placeholder y el nombre
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     final pm = PlaylistManager();

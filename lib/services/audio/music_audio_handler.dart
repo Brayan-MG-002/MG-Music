@@ -3,7 +3,6 @@
 
 import 'package:mg_music/services/audio/audio_player_manager.dart';
 import 'package:mg_music/services/audio/audio_service_adapter.dart';
-import 'package:flutter/foundation.dart';
 
 /// Handler simplificado que no usa audio_service
 class MusicAudioHandler {
@@ -50,10 +49,6 @@ class MusicAudioHandler {
 
 /// Inicializa de forma mínima sin bloqueos
 Future<void> initAudioService() async {
-  if (kDebugMode) {
-    print('🚀 Inicializando handler...');
-  }
-
   try {
     final handler = MusicAudioHandler();
     AudioServiceAdapter.setHandler(handler);

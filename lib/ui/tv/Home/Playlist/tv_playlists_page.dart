@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Página de playlists TV
+// Página de gestión de listas de reproducción para la interfaz de TV, con navegación por cuadrícula, vista detallada y modo de edición múltiple.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
@@ -39,7 +39,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
   Set<String> _songsToRemove = {};
 
   @override
-  /// Construye la vista principal de playlists (lista o detalle)
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     Widget content;
@@ -67,14 +66,11 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     );
   }
 
-  /// Construye la grilla de playlists del usuario
   Widget _buildPlaylistsGrid(AppThemeMode mode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TvPlaylistsTopBar(
-          onCreate: () {},
-        ),
+        TvPlaylistsTopBar(onCreate: () {}),
         Expanded(
           child: ValueListenableBuilder<List<String>>(
             valueListenable: _playlistManager.playlistsNotifier,
@@ -112,11 +108,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     );
   }
 
-  Widget _buildPlaylistItem(String name) {
-    return const SizedBox.shrink();
-  }
-
-  /// Construye el detalle de una playlist seleccionada
   Widget _buildPlaylistDetail(AppThemeMode mode) {
     final selected = _selectedPlaylist!;
     return Column(
@@ -131,10 +122,11 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
             });
           },
           onRename: () async {
-            final newName = await PlaylistActionService.showRenamePlaylistDialog(
-              context,
-              oldName: selected,
-            );
+            final newName =
+                await PlaylistActionService.showRenamePlaylistDialog(
+                  context,
+                  oldName: selected,
+                );
             if (mounted && newName != null && newName.isNotEmpty) {
               setState(() => _selectedPlaylist = newName);
             }
@@ -157,8 +149,10 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
               widget.onOpenPlayer();
             }
           },
-          canActions:
-              _playlistManager.getSongsNotifier(selected).value.isNotEmpty,
+          canActions: _playlistManager
+              .getSongsNotifier(selected)
+              .value
+              .isNotEmpty,
           removeMode: _isRemoveMode,
           onToggleRemoveMode: () {
             if (_isRemoveMode) _removeSelectedSongs();
@@ -215,11 +209,11 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
                     padding: const EdgeInsets.all(24),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5,
-                      childAspectRatio: 0.85,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 20,
-                    ),
+                          crossAxisCount: 5,
+                          childAspectRatio: 0.85,
+                          crossAxisSpacing: 20,
+                          mainAxisSpacing: 20,
+                        ),
                     itemCount: songs.length,
                     itemBuilder: (context, index) {
                       final song = songs[index];
@@ -267,8 +261,7 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
                             color: Colors.black.withOpacity(0.7),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color:
-                                  AppColors.primaryBlueMid.withOpacity(0.4),
+                              color: AppColors.primaryBlueMid.withOpacity(0.4),
                             ),
                           ),
                           child: Row(
@@ -304,7 +297,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     );
   }
 
-  /// Elimina canciones seleccionadas del modo eliminar
   void _removeSelectedSongs() {
     for (final path in _songsToRemove) {
       _playlistManager.removeSongFromPlaylist(_selectedPlaylist!, path);
@@ -312,7 +304,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     setState(() {});
   }
 
-  /// Abre una playlist y carga su caché de canciones
   Future<void> _openPlaylist(String name) async {
     setState(() {
       _selectedPlaylist = name;
@@ -326,7 +317,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     });
   }
 
-  /// Mapea rutas a modelos de canción usando caché local
   List<LocalSong> _mapPathsToSongs(List<String> paths) {
     final byPath = {for (var s in _allSongsCache) s.path: s};
     final songs = <LocalSong>[];
@@ -337,7 +327,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     return songs;
   }
 
-  /// Muestra opciones para una canción dentro de la playlist
   void _showSongOptions(LocalSong song) {
     GlobalModalService.show(
       title: song.title,
@@ -345,39 +334,30 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildDialogOption(
-            Ionicons.image,
-            'Usar como portada',
-            () async {
-              await _playlistManager.setPlaylistCover(
-                _selectedPlaylist!,
-                song.path,
-              );
-              Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
-              CustomToastService.show(
-                GlobalModalService.navigatorKey.currentContext!,
-                message: 'Portada actualizada',
-                type: ToastType.success,
-              );
-            },
-          ),
-          _buildDialogOption(
-            Ionicons.trash,
-            'Eliminar de playlist',
-            () async {
-              await _playlistManager.removeSongFromPlaylist(
-                _selectedPlaylist!,
-                song.path,
-              );
-              Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
-              CustomToastService.show(
-                GlobalModalService.navigatorKey.currentContext!,
-                message: 'Eliminada de la playlist',
-                type: ToastType.warning,
-              );
-            },
-            color: Colors.redAccent,
-          ),
+          _buildDialogOption(Ionicons.image, 'Usar como portada', () async {
+            await _playlistManager.setPlaylistCover(
+              _selectedPlaylist!,
+              song.path,
+            );
+            Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
+            CustomToastService.show(
+              GlobalModalService.navigatorKey.currentContext!,
+              message: 'Portada actualizada',
+              type: ToastType.success,
+            );
+          }),
+          _buildDialogOption(Ionicons.trash, 'Eliminar de playlist', () async {
+            await _playlistManager.removeSongFromPlaylist(
+              _selectedPlaylist!,
+              song.path,
+            );
+            Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
+            CustomToastService.show(
+              GlobalModalService.navigatorKey.currentContext!,
+              message: 'Eliminada de la playlist',
+              type: ToastType.warning,
+            );
+          }, color: Colors.redAccent),
         ],
       ),
       actions: [
@@ -391,7 +371,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     );
   }
 
-  /// Confirma la eliminación de una playlist
   void _showDeletePlaylistDialog(String name) {
     GlobalModalService.showConfirmation(
       title: 'Eliminar "$name"?',
@@ -412,46 +391,6 @@ class _TvPlaylistsPageState extends State<TvPlaylistsPage> {
     });
   }
 
-  /// Construye un botón de acción estilizado
-  Widget _buildActionButton(
-    IconData icon,
-    String label,
-    VoidCallback onTap, {
-    required ColorSwatch<int> color,
-  }) {
-    return TvFocusableItem(
-      onTap: onTap,
-      borderRadius: 8,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade800.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(color: Colors.white)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Construye un botón redondo simple con icono
-  Widget _buildIconButton(IconData icon, VoidCallback onTap) {
-    return TvFocusableItem(
-      onTap: onTap,
-      borderRadius: 50,
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Icon(icon, color: Colors.white, size: 24),
-      ),
-    );
-  }
-
-  /// Construye una opción para diálogos
   Widget _buildDialogOption(
     IconData icon,
     String label,

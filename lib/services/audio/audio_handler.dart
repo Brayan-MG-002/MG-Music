@@ -1,8 +1,9 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Handler para audio_service con acciones de favorito y cerrar
+// Handler para audio_service — auto-actualización sin depender del isolate de UI
 
 import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:mg_music/services/logic/favorites_manager.dart';
 import 'package:mg_music/services/models/song_model.dart';
@@ -12,22 +13,68 @@ import 'package:mg_music/services/audio/audio_player_manager.dart';
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player;
 
-  // Acciones personalizadas
-  static const String actionFavorite = 'favorite';
-  static const String actionStop = 'stop';
-
   MyAudioHandler(this._player) {
-    _player.playbackEventStream.map(_transformEvent).listen((state) {
-      playbackState.add(state);
+    _configureAudioSession();
+
+    _player.playerStateStream.listen((_) {
+      try { playbackState.add(_transformEvent(_player.playbackEvent)); } catch (_) {}
     });
 
-    FavoritesManager().favoritePathsNotifier.addListener(_refreshState);
+    _player.positionStream.listen((_) {
+      try { playbackState.add(_transformEvent(_player.playbackEvent)); } catch (_) {}
+    });
+
+    _player.durationStream.listen((_) {
+      try { playbackState.add(_transformEvent(_player.playbackEvent)); } catch (_) {}
+    });
+
+    AudioPlayerManager().currentSongNotifier.addListener(_onSongChanged);
+    FavoritesManager().favoritePathsNotifier.addListener(_onFavoritesChanged);
   }
 
-  void _refreshState() {
+  Future<void> _configureAudioSession() async {
     try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+    } catch (_) {}
+  }
+
+  void _onSongChanged() {
+    final song = AudioPlayerManager().currentSongNotifier.value;
+    if (song != null) {
+      _updateMediaItem(song);
+    }
+  }
+
+  void _onFavoritesChanged() {
+    final song = AudioPlayerManager().currentSongNotifier.value;
+    if (song != null) {
+      _updateMediaItem(song);
+    }
+  }
+
+  void _updateMediaItem(LocalSong song) {
+    final isFavorite = FavoritesManager().isFavorite(song);
+    try {
+      mediaItem.add(
+        MediaItem(
+          id: song.id.toString(),
+          album: song.artist,
+          title: song.title,
+          artist: song.artist,
+          duration: Duration(milliseconds: song.duration ?? 0),
+          artUri: Uri.parse(
+            'content://media/external/audio/media/${song.id}/albumart',
+          ),
+          extras: {'isFavorite': isFavorite, 'isAdo': AdoHandler.isAdo(song)},
+        ),
+      );
       playbackState.add(_transformEvent(_player.playbackEvent));
     } catch (_) {}
+  }
+
+  void updateMetadata(LocalSong song) {
+    _updateMediaItem(song);
   }
 
   @override
@@ -35,7 +82,6 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.play();
     } on PlatformException catch (_) {
-      // Silenciado para evitar fallos en la UI
     } catch (_) {}
   }
 
@@ -44,7 +90,6 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.pause();
     } on PlatformException catch (_) {
-      // Silenciado para evitar fallos en la UI
     } catch (_) {}
   }
 
@@ -53,7 +98,6 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.seek(position);
     } on PlatformException catch (_) {
-      // Silenciado para evitar fallos en la UI
     } catch (_) {}
   }
 
@@ -65,27 +109,9 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
-    await _player.stop();
-    await super.stop();
-  }
-
-  /// Actualiza metadatos de la canción en la notificación
-  void updateMetadata(LocalSong song) {
-    final isFavorite = FavoritesManager().isFavorite(song);
-
-    mediaItem.add(
-      MediaItem(
-        id: song.id.toString(),
-        album: song.artist,
-        title: song.title,
-        artist: song.artist,
-        duration: Duration(milliseconds: song.duration ?? 0),
-        artUri: Uri.parse(
-          'content://media/external/audio/media/${song.id}/albumart',
-        ),
-        extras: {'isFavorite': isFavorite, 'isAdo': AdoHandler.isAdo(song)},
-      ),
-    );
+    try {
+      await _player.pause();
+    } catch (_) {}
   }
 
   @override
@@ -102,13 +128,21 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
       final song = AudioPlayerManager().currentSongNotifier.value;
       if (song != null) {
         await FavoritesManager().toggleFavorite(song);
-        updateMetadata(song);
+        _updateMediaItem(song);
       }
     }
     return super.customAction(name, extras);
   }
 
-  /// Mapea eventos de JustAudio a AudioService
+  @override
+  Future<void> fastForward() async {
+    final song = AudioPlayerManager().currentSongNotifier.value;
+    if (song != null) {
+      await FavoritesManager().toggleFavorite(song);
+      _updateMediaItem(song);
+    }
+  }
+
   PlaybackState _transformEvent(PlaybackEvent event) {
     final song = AudioPlayerManager().currentSongNotifier.value;
     final isFavorite = song != null
@@ -117,7 +151,6 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
 
     return PlaybackState(
       controls: [
-        // 0: FAVORITE — mapeado como fastForward con icono custom
         MediaControl(
           androidIcon: isFavorite
               ? 'drawable/ic_heart_white_24dp'
@@ -125,13 +158,9 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
           label: 'Favorito',
           action: MediaAction.fastForward,
         ),
-        // 1: PREV
         MediaControl.skipToPrevious,
-        // 2: PLAY/PAUSE
         if (_player.playing) MediaControl.pause else MediaControl.play,
-        // 3: NEXT
         MediaControl.skipToNext,
-        // 4: STOP (X)
         MediaControl(
           androidIcon: 'drawable/ic_close_white_24dp',
           label: 'Cerrar',
@@ -149,15 +178,20 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
         MediaAction.skipToPrevious,
         MediaAction.fastForward,
       },
-      // Vista compacta: Anterior [1], Play/Pause [2], Siguiente [3]
       androidCompactActionIndices: const [1, 2, 3],
-      processingState: const {
-        ProcessingState.idle: AudioProcessingState.idle,
-        ProcessingState.loading: AudioProcessingState.loading,
-        ProcessingState.buffering: AudioProcessingState.buffering,
-        ProcessingState.ready: AudioProcessingState.ready,
-        ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState]!,
+      processingState: () {
+        switch (_player.processingState) {
+          case ProcessingState.idle:
+          case ProcessingState.completed:
+            return AudioProcessingState.buffering;
+          case ProcessingState.loading:
+            return AudioProcessingState.loading;
+          case ProcessingState.buffering:
+            return AudioProcessingState.buffering;
+          case ProcessingState.ready:
+            return AudioProcessingState.ready;
+        }
+      }(),
       playing: _player.playing,
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
@@ -167,11 +201,6 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> fastForward() async {
-    final song = AudioPlayerManager().currentSongNotifier.value;
-    if (song != null) {
-      await FavoritesManager().toggleFavorite(song);
-      updateMetadata(song);
-    }
+  Future<void> onTaskRemoved() async {
   }
 }

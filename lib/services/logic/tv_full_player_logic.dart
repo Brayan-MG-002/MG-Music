@@ -5,19 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mg_music/services/audio/audio_player_manager.dart';
 
-/// Gestor de lógica para el reproductor a pantalla completa en TV
 class TvFullPlayerLogic {
   final ScrollController scrollController = ScrollController();
   final FocusNode sliderFocusNode = FocusNode();
   final double itemHeight = 60.0;
 
-  /// Libera recursos controladores
   void dispose() {
     scrollController.dispose();
     sliderFocusNode.dispose();
   }
 
-  /// Formatea duración en formato mm:ss
   String formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final minutes = twoDigits(duration.inMinutes.remainder(60));
@@ -25,7 +22,6 @@ class TvFullPlayerLogic {
     return "$minutes:$seconds";
   }
 
-  /// Desplaza la lista hacia la canción actual
   void scrollToCurrent(int index) {
     if (scrollController.hasClients) {
       final offset = (index * itemHeight) - 170.0;
@@ -37,7 +33,6 @@ class TvFullPlayerLogic {
     }
   }
 
-  /// Maneja eventos de teclado en el slider para navegación
   KeyEventResult handleSliderKeyEvent(
     BuildContext context,
     FocusNode node,

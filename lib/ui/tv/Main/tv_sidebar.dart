@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Barra lateral de navegación para TV
+// Barra lateral de navegación para la interfaz de TV, con soporte para mini-reproductor y temporizador.
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -28,15 +28,7 @@ class TvSidebarPainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: mode == AppThemeMode.dark
-            ? [
-                Colors.blue.shade900.withOpacity(0.6),
-                Colors.blue.shade900.withOpacity(0.2),
-              ]
-            : [
-                Colors.white.withOpacity(0.9),
-                Colors.blue.shade300.withOpacity(0.6),
-              ],
+        colors: AppColors.sidebarGradient(mode),
       ).createShader(rect)
       ..style = PaintingStyle.fill;
 
@@ -76,7 +68,6 @@ class TvSidebarPainter extends CustomPainter {
   }
 
   @override
-  /// Indica que siempre debe repintarse
   bool shouldRepaint(CustomPainter oldDelegate) => true;
 }
 
@@ -91,7 +82,6 @@ class TvSidebar extends StatelessWidget {
   });
 
   @override
-  /// Construye la barra lateral con animaciones y fondo personalizado
   Widget build(BuildContext context) {
     return Consumer<ThemeService>(
       builder: (context, themeService, _) {
@@ -172,7 +162,6 @@ class TvSidebar extends StatelessWidget {
     );
   }
 
-  /// Envuelve un widget con la animación de entrada
   Widget _buildAnimatedItem(int position, Widget child) {
     return AnimationConfiguration.staggeredList(
       position: position,
@@ -184,7 +173,6 @@ class TvSidebar extends StatelessWidget {
     );
   }
 
-  /// Construye el encabezado de la barra lateral (Logo o mini reproductor circular)
   Widget _buildSidebarHeader(AppThemeMode mode) {
     final manager = AudioPlayerManager();
     return ValueListenableBuilder<String>(
@@ -209,12 +197,10 @@ class TvSidebar extends StatelessWidget {
             return ValueListenableBuilder<LocalSong?>(
               valueListenable: manager.currentSongNotifier,
               builder: (context, song, _) {
-                // Logo por defecto
                 final Widget logo = Padding(
                   padding: const EdgeInsets.symmetric(vertical: 30.0),
                   child: Image.asset('assets/MG-I-T.png', width: 60),
                 );
-                // Mini control circular
                 final Widget mini = Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20.0),
                   child: TvFocusableItem(
@@ -286,7 +272,6 @@ class TvSidebar extends StatelessWidget {
     );
   }
 
-  /// Construye un elemento de menú de la barra lateral
   Widget _buildMenuItem(
     int index,
     IconData iconOff,
@@ -298,7 +283,7 @@ class TvSidebar extends StatelessWidget {
 
     final color = isSelected
         ? AppColors.textPrimary(mode)
-        : AppColors.icon(mode);
+        : AppColors.textSecondary(mode).withOpacity(0.6);
 
     return TvFocusableItem(
       isSelected: isSelected,
@@ -336,7 +321,6 @@ class TvSidebar extends StatelessWidget {
     );
   }
 
-  /// Muestra el estado del temporizador de reposo
   Widget _buildSleepTimerStatus(AppThemeMode mode) {
     return ValueListenableBuilder<DateTime?>(
       valueListenable: AudioPlayerManager().sleepEndTimeNotifier,
@@ -358,7 +342,7 @@ class TvSidebar extends StatelessWidget {
             final timeString =
                 '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
-            final color = AppColors.primaryBlueLight;
+            final color = AppColors.primaryBlueMid;
             return Column(
               children: [
                 Icon(Ionicons.timer_outline, color: color, size: 20),

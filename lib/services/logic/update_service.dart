@@ -13,7 +13,6 @@ class UpdateService {
   static const String _remoteVersionUrl =
       'https://mg-special.web.app/Body/MG-Music/version.json';
 
-  /// Verifica si hay conexión a internet
   static Future<bool> hasInternetConnection() async {
     try {
       final connectivityResult = await Connectivity()
@@ -25,7 +24,6 @@ class UpdateService {
     }
   }
 
-  /// Obtiene información de versión del servidor remoto
   static Future<VersionModel?> getRemoteVersion() async {
     try {
       final response = await http
@@ -33,7 +31,10 @@ class UpdateService {
             Uri.parse(_remoteVersionUrl),
             headers: {'Content-Type': 'application/json'},
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => http.Response('timeout', 408),
+          );
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
@@ -45,21 +46,23 @@ class UpdateService {
     }
   }
 
-  /// Obtiene la versión local de la aplicación
   static Future<String> getLocalVersion() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       return packageInfo.version;
     } catch (e) {
-      return '1.1.1';
+      return '1.1.0';
     }
   }
 
-  /// Compara dos versiones semánticas (major.minor.patch)
-  /// Retorna: -1 si local < remote, 0 si iguales, 1 si local > remote
   static int compareVersions(String localVersion, String remoteVersion) {
-    final localParts = localVersion.split('.').map(int.parse).toList();
-    final remoteParts = remoteVersion.split('.').map(int.parse).toList();
+    int parsePart(String part) {
+      final match = RegExp(r'^\d+').firstMatch(part);
+      return match != null ? int.parse(match.group(0)!) : 0;
+    }
+
+    final localParts = localVersion.split('.').map(parsePart).toList();
+    final remoteParts = remoteVersion.split('.').map(parsePart).toList();
 
     while (localParts.length < remoteParts.length) {
       localParts.add(0);
@@ -75,8 +78,6 @@ class UpdateService {
     return 0;
   }
 
-  /// Verifica si hay actualización disponible
-  /// [isTv] indica si el dispositivo es una TV (para filtrar betas)
   static Future<Map<String, dynamic>> checkForUpdate({
     bool isTv = false,
   }) async {
@@ -104,44 +105,44 @@ class UpdateService {
       final packageInfo = await PackageInfo.fromPlatform();
       final localVersionCode = int.tryParse(packageInfo.buildNumber) ?? 0;
 
-      // 1. Verificar actualización estable (para todos)
-      if (remoteVersion.versionCode > localVersionCode) {
-        return {
-          'hasUpdate': true,
-          'isBeta': false,
-          'error': null,
-          'data': remoteVersion,
-        };
-      }
+      VersionModel? patchData;
+      bool isBetaUpdate = false;
 
-      // 2. Verificar actualización Beta (solo móvil)
-      if (!isTv &&
-          remoteVersion.betaVersionCode != null &&
-          remoteVersion.betaVersionCode! > localVersionCode) {
-        // Verificar si el usuario ya ignoró esta beta específica
+      final int stableRemote = remoteVersion.versionCode;
+      final int betaRemote = remoteVersion.betaVersionCode ?? 0;
+
+      if (!isTv && betaRemote > localVersionCode && betaRemote > stableRemote) {
         final prefs = await SharedPreferences.getInstance();
         final ignoredBeta = prefs.getInt('ignored_beta_version_code') ?? 0;
 
-        if (remoteVersion.betaVersionCode! > ignoredBeta) {
-          // Crear un modelo de versión temporal para la beta para que el diálogo lo use
-          final betaData = VersionModel(
+        if (betaRemote > ignoredBeta) {
+          isBetaUpdate = true;
+          patchData = VersionModel(
             version: remoteVersion.betaVersion ?? remoteVersion.version,
-            versionCode: remoteVersion.betaVersionCode!,
+            versionCode: betaRemote,
             title: remoteVersion.betaTitle ?? 'Nueva Beta Disponible',
             changelog: remoteVersion.betaChangelog ?? '',
             websiteUrl:
                 remoteVersion.betaWebsiteUrl ?? remoteVersion.websiteUrl,
+            apkUrl: remoteVersion.betaApkUrl ?? remoteVersion.apkUrl,
             importance: remoteVersion.betaImportance ?? 'low',
             forceUpdate: false,
           );
-
-          return {
-            'hasUpdate': true,
-            'isBeta': true,
-            'error': null,
-            'data': betaData,
-          };
         }
+      }
+
+      if (patchData == null && stableRemote > localVersionCode) {
+        isBetaUpdate = false;
+        patchData = remoteVersion;
+      }
+
+      if (patchData != null) {
+        return {
+          'hasUpdate': true,
+          'isBeta': isBetaUpdate,
+          'error': null,
+          'data': patchData,
+        };
       }
 
       return {

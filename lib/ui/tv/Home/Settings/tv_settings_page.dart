@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Página principal de configuración TV
+// Página de ajustes principal para la interfaz de TV, con opciones de personalización, gestión de archivos y enlaces de soporte.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -16,6 +16,15 @@ import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/ui/shared/screens/update_dialog.dart';
 import 'package:mg_music/ui/shared/screens/update_loading_dialog.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
+import 'dart:io';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:mg_music/main.dart' show isBeta;
+import 'package:mg_music/ui/mobile/Home/Settings/components/backup_settings_page.dart';
+import 'package:mg_music/ui/mobile/Home/Settings/components/folder_settings_modal.dart';
+import 'package:mg_music/ui/mobile/Home/Settings/components/theme_settings_modal.dart';
+import 'package:mg_music/ui/mobile/Home/Settings/components/link_dialog.dart';
+import 'package:mg_music/services/ui/ado_experience_service.dart';
 import 'tv_settings_widgets.dart';
 import 'tv_settings_logo.dart';
 
@@ -29,15 +38,17 @@ class TvSettingsPage extends StatefulWidget {
 class _TvSettingsPageState extends State<TvSettingsPage> {
   bool _hasAdoSongs = true;
   bool _adoBoostExpanded = false;
+  String _appVersion = '';
+  bool _hasPendingUpdate = false;
 
   @override
-  /// Inicializa el estado y carga datos de Ado
   void initState() {
     super.initState();
     _loadAdoStatus();
+    _loadAppVersion();
+    _loadPendingUpdateState();
   }
 
-  /// Lee del almacenamiento si hay canciones de Ado
   Future<void> _loadAdoStatus() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
@@ -47,8 +58,18 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     }
   }
 
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
+  }
+
+  Future<void> _loadPendingUpdateState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getInt('pending_update_version_code') ?? 0;
+    if (mounted) setState(() => _hasPendingUpdate = code > 0);
+  }
+
   @override
-  /// Construye la página de ajustes TV
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     final manager = AudioPlayerManager();
@@ -70,12 +91,55 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
               children: [
                 const SizedBox(height: 24),
                 const Center(child: TvSettingsLogo()),
+                if (isBeta)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlueMid.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppColors.primaryBlueMid.withOpacity(0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          'BETA',
+                          style: TextStyle(
+                            color: AppColors.primaryBlueMid,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            letterSpacing: 2.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 36),
+
+                if (isBeta) ...[
+                  TvSettingsSectionTitle(title: 'Beta Program', mode: mode),
+                  TvSettingsRow(
+                    left: TvSettingsTile(
+                      icon: Ionicons.bug_outline,
+                      title: 'Reportar Error (Beta)',
+                      subtitle: 'Informa fallos visuales o técnicos',
+                      onTap: () => _showBetaErrorReport(context, mode),
+                      mode: mode,
+                    ),
+                    right: const SizedBox.shrink(),
+                  ),
+                ],
 
                 TvSettingsSectionTitle(title: 'General', mode: mode),
 
                 TvSettingsRow(
-                  left: _buildThemeToggle(mode),
+                  left: _buildThemeTile(mode),
                   right: ValueListenableBuilder<bool>(
                     valueListenable: manager.showVisualizerNotifier,
                     builder: (context, show, _) => TvSettingsSwitchTile(
@@ -90,6 +154,23 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                 ),
 
                 TvSettingsRow(
+                  left: TvSettingsTile(
+                    icon: Ionicons.folder_outline,
+                    title: 'Ubicación de Música',
+                    subtitle: 'Elegir qué carpetas escanear',
+                    onTap: () => FolderSettingsContent.showModal(context, isTv: true),
+                    mode: mode,
+                  ),
+                  right: TvSettingsTile(
+                    icon: Ionicons.shield_checkmark_outline,
+                    title: 'Gestión de Copias',
+                    subtitle: 'Configurar, crear y restaurar respaldos',
+                    onTap: () => _navigateTo(const BackupSettingsPage()),
+                    mode: mode,
+                  ),
+                ),
+
+                TvSettingsRow(
                   left: ValueListenableBuilder<int?>(
                     valueListenable: manager.sleepTimerNotifier,
                     builder: (context, minutes, _) {
@@ -100,10 +181,12 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                             : Ionicons.timer_outline,
                         title: 'Temporizador',
                         subtitle: isActive
-                            ? '$minutes min restantes'
+                            ? (minutes == -1
+                                ? 'Al terminar canción'
+                                : '$minutes min restantes')
                             : 'Apagado',
                         isActive: isActive,
-                        onTap: () => _showSleepTimerDialog(mode),
+                        onTap: () => GlobalModalService.showSleepTimerDialog(context),
                         mode: mode,
                       );
                     },
@@ -111,9 +194,12 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                   right: TvSettingsTile(
                     icon: Ionicons.cloud_download_outline,
                     title: 'Actualizar',
-                    subtitle: 'Buscar nueva versión',
+                    subtitle: _hasPendingUpdate
+                        ? '⚠️ Actualización pendiente'
+                        : 'Buscar nueva versión',
                     onTap: () => _checkForUpdatesManual(),
                     mode: mode,
+                    badge: _hasPendingUpdate,
                   ),
                 ),
 
@@ -146,6 +232,45 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                   right: _buildAdoBoostTile(mode),
                 ),
 
+                TvSettingsRow(
+                  left: ValueListenableBuilder<bool>(
+                    valueListenable: AdoExperienceService().dynamicColorEnabledNotifier,
+                    builder: (context, enabled, _) => TvSettingsSwitchTile(
+                      icon: Ionicons.color_filter_outline,
+                      title: 'Colores Dinámicos',
+                      subtitle: enabled ? 'Activados' : 'Desactivados',
+                      value: enabled,
+                      onChanged: (val) => AdoExperienceService().setDynamicColorEnabled(val),
+                      mode: mode,
+                    ),
+                  ),
+                  right: ValueListenableBuilder<int>(
+                    valueListenable: AdoExperienceService().dynamicColorModeNotifier,
+                    builder: (context, colorMode, _) {
+                      final labels = ['Fijo', 'Latido', 'Múltiple'];
+                      final isEnabled = AdoExperienceService().dynamicColorEnabled;
+                      return TvSettingsTile(
+                        icon: Ionicons.options_outline,
+                        title: 'Modo de Color',
+                        subtitle: !isEnabled ? 'Habilita colores primero' : labels[colorMode],
+                        onTap: isEnabled ? () async {
+                          final selected = await GlobalModalService.showSelectionList<int>(
+                            title: 'Modo de Color Dinámico',
+                            icon: Ionicons.color_filter_outline,
+                            items: [0, 1, 2],
+                            labelBuilder: (idx) => labels[idx],
+                          );
+                          if (selected != null) {
+                            AdoExperienceService().setDynamicColorMode(selected);
+                          }
+                        } : null,
+                        disabled: !isEnabled,
+                        mode: mode,
+                      );
+                    },
+                  ),
+                ),
+
                 TvSettingsSectionTitle(
                   title: 'Información de la App',
                   mode: mode,
@@ -155,7 +280,9 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                   left: TvSettingsTile(
                     icon: Ionicons.sparkles_outline,
                     title: 'Novedades de la Versión',
-                    subtitle: 'Descubre qué hay de nuevo en la v1.1.1',
+                    subtitle: _appVersion.isEmpty
+                        ? 'Descubre qué hay de nuevo'
+                        : 'Descubre qué hay de nuevo en la v$_appVersion',
                     onTap: () => _showWhatsNewDialog(),
                     mode: mode,
                   ),
@@ -209,9 +336,9 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                     mode: mode,
                   ),
                   right: TvSettingsTile(
-                    icon: Ionicons.cash_outline,
+                    icon: Ionicons.logo_paypal,
                     title: 'Donar',
-                    subtitle: 'Apoya con Nequi',
+                    subtitle: 'Apoya con PayPal',
                     onTap: () => _showDonateDialog(),
                     mode: mode,
                   ),
@@ -226,97 +353,36 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Tile de tema con interruptor
-  Widget _buildThemeToggle(AppThemeMode mode) {
+  Widget _buildThemeTile(AppThemeMode mode) {
     return Consumer<ThemeService>(
       builder: (context, themeService, _) {
-        final isDark = themeService.isDark;
-        return TvFocusableItem(
-          onTap: () => themeService.toggle(),
-          borderRadius: 20,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 400),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.themeBorder(mode), width: 2),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primaryBlueMid.withOpacity(0.2),
-                  AppColors.surface(mode).withOpacity(0.0),
-                ],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.black.withOpacity(0.3)
-                            : Colors.blue.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        transitionBuilder: (child, anim) => RotationTransition(
-                          turns: Tween(begin: 0.75, end: 1.0).animate(anim),
-                          child: FadeTransition(opacity: anim, child: child),
-                        ),
-                        child: Icon(
-                          isDark
-                              ? Icons.dark_mode_rounded
-                              : Icons.light_mode_rounded,
-                          key: ValueKey(isDark),
-                          color: isDark ? Colors.white : Colors.orange.shade700,
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Switch(
-                      value: !isDark,
-                      activeColor: Colors.blue.shade700,
-                      onChanged: (_) => themeService.toggle(),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Tema',
-                  style: TextStyle(
-                    color: AppColors.textPrimary(mode),
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: Text(
-                    isDark ? 'Modo Oscuro' : 'Modo Claro',
-                    key: ValueKey(isDark),
-                    style: TextStyle(
-                      color: AppColors.textSecondary(mode),
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        String desc;
+        switch (themeService.themeType) {
+          case AppThemeType.system:
+            desc = 'Igual que el dispositivo';
+            break;
+          case AppThemeType.timeBased:
+            desc = 'Por horario automático';
+            break;
+          case AppThemeType.light:
+            desc = 'Siempre claro';
+            break;
+          case AppThemeType.dark:
+            desc = 'Siempre oscuro';
+            break;
+        }
+
+        return TvSettingsTile(
+          icon: Ionicons.color_palette_outline,
+          title: 'Tema',
+          subtitle: desc,
+          onTap: () => ThemeSettingsContent.showModal(context, isTv: true),
+          mode: mode,
         );
       },
     );
   }
 
-  /// Tile expandible para AdoBoost
   Widget _buildAdoBoostTile(AppThemeMode mode) {
     final manager = AudioPlayerManager();
     return ValueListenableBuilder<bool>(
@@ -596,7 +662,6 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Muestra opciones de inicio de la app
   void _showStartupDialog() {
     final manager = AudioPlayerManager();
     GlobalModalService.show(
@@ -632,7 +697,6 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Opción de modo de inicio para el diálogo
   Widget _radioOption({
     required String title,
     required String subtitle,
@@ -694,106 +758,7 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Muestra diálogo para temporizador de sueño
-  void _showSleepTimerDialog(AppThemeMode mode) {
-    final options = [
-      ('15 Minutos', 15),
-      ('30 Minutos', 30),
-      ('60 Minutos', 60),
-    ];
 
-    GlobalModalService.show(
-      title: 'Temporizador de Sueño',
-      icon: Ionicons.timer_outline,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ...options.map(
-            (o) => TvFocusableItem(
-              onTap: () {
-                AudioPlayerManager().setSleepTimer(o.$2);
-                Navigator.of(
-                  GlobalModalService.navigatorKey.currentContext!,
-                ).pop();
-                CustomToastService.show(
-                  GlobalModalService.navigatorKey.currentContext!,
-                  message: 'Temporizador: ${o.$1}',
-                  type: ToastType.info,
-                  icon: Ionicons.timer_outline,
-                );
-              },
-              borderRadius: 12,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Ionicons.time_outline,
-                      color: AppColors.primaryBlueMid,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      o.$1,
-                      style: TextStyle(
-                        color: AppColors.textPrimary(mode),
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const Divider(color: Colors.white12),
-          TvFocusableItem(
-            onTap: () {
-              AudioPlayerManager().setSleepTimer(0);
-              Navigator.of(
-                GlobalModalService.navigatorKey.currentContext!,
-              ).pop();
-              CustomToastService.show(
-                GlobalModalService.navigatorKey.currentContext!,
-                message: 'Temporizador desactivado',
-                type: ToastType.info,
-                icon: Ionicons.timer_outline,
-              );
-            },
-            borderRadius: 12,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: Row(
-                children: [
-                  const Icon(Ionicons.close_circle_outline, color: Colors.red),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Desactivar',
-                    style: TextStyle(
-                      color: AppColors.textPrimary(mode),
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        ModalActionButton(
-          label: 'Cerrar',
-          onPressed: () => Navigator.of(
-            GlobalModalService.navigatorKey.currentContext!,
-          ).pop(),
-          color: Colors.grey,
-        ),
-      ],
-    );
-  }
-
-  /// Muestra un diálogo simple con enlace informativo
   void _showTvLinkDialog({
     required String title,
     required String message,
@@ -815,10 +780,127 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Muestra diálogo de novedades
+  Future<void> _showBetaErrorReport(
+    BuildContext context,
+    AppThemeMode mode,
+  ) async {
+    final textController = TextEditingController();
+
+    // 1. Elegir tipo de error
+    final selectedType = await GlobalModalService.showSelectionList<String>(
+      title: 'Tipo de Error',
+      icon: Ionicons.bug_outline,
+      items: ['Visual / Diseño', 'Funcional / Técnico', 'Otro / Sugerencia'],
+      labelBuilder: (item) => item,
+    );
+
+    if (selectedType == null) return;
+
+    // 2. Detallar el error
+    if (!context.mounted) return;
+
+    final confirmDescription = await GlobalModalService.show<bool>(
+      title: 'Detalles del Error',
+      icon: Ionicons.create_outline,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Por favor describe brevemente qué sucede:',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 15),
+          TextField(
+            controller: textController,
+            maxLines: 4,
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Ej: Al abrir el reproductor la imagen parpadea...',
+              hintStyle: const TextStyle(color: Colors.white30),
+              filled: true,
+              fillColor: Colors.black26,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: AppColors.primaryBlueMid),
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        ModalActionButton(
+          label: 'Cancelar',
+          onPressed: () => Navigator.pop(
+            GlobalModalService.navigatorKey.currentContext!,
+            false,
+          ),
+          color: Colors.grey.shade600,
+        ),
+        ModalActionButton(
+          label: 'Siguiente',
+          onPressed: () => Navigator.pop(
+            GlobalModalService.navigatorKey.currentContext!,
+            true,
+          ),
+          color: AppColors.primaryBlueMid,
+        ),
+      ],
+    );
+
+    if (confirmDescription != true || textController.text.trim().isEmpty) return;
+
+    // 3. Confirmación y envío
+    if (!context.mounted) return;
+
+    final deviceInfo = DeviceInfoPlugin();
+    String deviceModel = "Desconocido";
+    String androidVersion = "Desconocida";
+    String brand = "";
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        deviceModel = androidInfo.model;
+        androidVersion = androidInfo.version.release;
+        brand = androidInfo.brand;
+      }
+    } catch (_) {}
+
+    final msg = '''*REPORTE DE ERROR - MG MUSIC BETA (TV)*
+-------------------------------
+*Tipo:* $selectedType
+*Descripción:* ${textController.text.trim()}
+
+*DATOS TÉCNICOS:*
+• App Versión: ${_appVersion.isEmpty ? 'N/A' : _appVersion}
+• Android: $androidVersion
+• Dispositivo: $brand $deviceModel (TV)
+-------------------------------''';
+
+    final whatsappUrl =
+        "https://wa.me/573168060939?text=${Uri.encodeComponent(msg)}";
+
+    await LinkDialog.show(
+      context: context,
+      title: 'Confirmar Envío',
+      icon: Ionicons.logo_whatsapp,
+      content:
+          'Se enviará tu mensaje junto con información técnica (App, Android y Dispositivo) para ayudarnos a resolver el error.\n\n¿Abrir WhatsApp?',
+      url: whatsappUrl,
+    );
+  }
+
+  void _navigateTo(Widget page) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => Scaffold(body: page)),
+    );
+  }
+
   void _showWhatsNewDialog() {
     GlobalModalService.show(
-      title: 'Novedades v1.1.1',
+      title: _appVersion.isEmpty ? 'Novedades' : 'Novedades v$_appVersion',
       icon: Ionicons.sparkles_outline,
       content: _buildWhatsNewContent(),
       actions: [
@@ -833,32 +915,36 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Construye el contenido del diálogo de novedades
   Widget _buildWhatsNewContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         _aboutSection(
-          title: '🛠️ Hotfix (v1.1.1)',
+          title: '🚀 Sincronización Total (v1.2.0)',
           body:
-              '• Mejora significativa en el sistema de reporte de errores.\n• Optimización general del rendimiento.\n• Ajustes de responsividad.',
+              '• Unificación de funciones entre TV y Mobile.\n• Nueva gestión de Copias de Seguridad en TV.\n• Soporte para Reporte de Errores Beta.\n• Colores Dinámicos para canciones de Ado.',
         ),
         const SizedBox(height: 12),
         _aboutSection(
-          title: '✨ Interfaz y Animaciones',
+          title: '🎵 Editor de Metadatos',
           body:
-              '• Rediseño completo de la UI.\n• Nuevas animaciones fluidas.\n• Nuevo Tema Claro.\n• Rediseño de favoritos y playlists.',
+              '• Modifica título, artista y carátula de tus canciones.\n• Cambios permanentes en los archivos locales.\n• Organización mejorada de la biblioteca musical.',
+        ),
+        const SizedBox(height: 12),
+        _aboutSection(
+          title: '✨ Mejoras de Sistema',
+          body:
+              '• Detección inteligente de orientación y dispositivo.\n• Pantalla de permisos renovada y responsiva.\n• Optimización de carga y animaciones fluidas.',
         ),
       ],
     );
   }
 
-  /// Muestra diálogo de donación
   void _showDonateDialog() {
     GlobalModalService.show(
-      title: 'Donar con Nequi',
-      icon: Ionicons.cash_outline,
+      title: 'Donar por PayPal',
+      icon: Ionicons.logo_paypal,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -873,12 +959,12 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            '316 806 0939',
+            'Escanea para donar',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
-              letterSpacing: 2,
+              letterSpacing: 1,
             ),
           ),
           const SizedBox(height: 6),
@@ -900,7 +986,6 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Muestra información acerca de la app
   void _showAboutDialog() {
     GlobalModalService.show(
       title: 'Sobre MG Music',
@@ -918,7 +1003,6 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Construye el contenido del diálogo "Acerca de"
   Widget _buildAboutContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -945,7 +1029,6 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Construye una sección de texto para "Acerca de"
   Widget _aboutSection({required String title, required String body}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -975,7 +1058,6 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     );
   }
 
-  /// Ejecuta la verificación manual de actualización
   Future<void> _checkForUpdatesManual() async {
     BuildContext? dialogCtx;
     showDialog(

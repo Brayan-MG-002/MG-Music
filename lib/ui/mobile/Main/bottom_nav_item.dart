@@ -9,6 +9,7 @@ class BottomNavItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
+  final Widget? iconWidget;
 
   const BottomNavItem({
     super.key,
@@ -17,10 +18,10 @@ class BottomNavItem extends StatelessWidget {
     required this.label,
     required this.isSelected,
     required this.onTap,
+    this.iconWidget,
   });
 
   @override
-  /// Construye un ítem del nav inferior con animación de escala
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return GestureDetector(
@@ -34,10 +35,10 @@ class BottomNavItem extends StatelessWidget {
             duration: const Duration(milliseconds: 200),
             scale: isSelected ? 1.1 : 1.0,
             curve: Curves.easeOut,
-            child: Icon(
+            child: iconWidget ?? Icon(
               isSelected ? iconOn : iconOff,
               color: isSelected
-                  ? AppColors.primaryBlueLight
+                  ? AppColors.textPrimary(mode)
                   : AppColors.icon(mode).withOpacity(0.5),
               size: 24.r,
             ),
@@ -51,7 +52,7 @@ class BottomNavItem extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: AppColors.primaryBlueLight,
+                  color: AppColors.textPrimary(mode),
                   fontSize: 10.sp,
                   fontWeight: FontWeight.bold,
                 ),

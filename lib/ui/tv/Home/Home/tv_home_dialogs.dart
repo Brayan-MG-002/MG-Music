@@ -1,20 +1,12 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Diálogos del home TV usando GlobalModalService y CustomToastService
+// Modales específicos para la interfaz de TV: ordenamiento y filtrado de canciones, utilizando GlobalModalService.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:mg_music/services/models/song_model.dart';
-import 'package:mg_music/services/audio/audio_player_manager.dart';
-import 'package:mg_music/services/logic/playlist_manager.dart';
-import 'package:mg_music/services/logic/favorites_manager.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
 import 'package:mg_music/services/ui/global_modal_service.dart';
-import 'package:mg_music/services/ui/custom_toast_service.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
-import 'package:mg_music/services/audio/ado_handler.dart';
-import 'package:mg_music/services/ui/playlist_action_service.dart';
 
-/// Muestra el modal de ordenar canciones
 void showTvSortModal({
   required AppThemeMode mode,
   required VoidCallback onAdoPrimero,
@@ -70,7 +62,6 @@ void showTvSortModal({
   );
 }
 
-/// Muestra el modal de filtrar por artista
 void showTvArtistModal({
   required AppThemeMode mode,
   required List<String> artists,
@@ -130,116 +121,7 @@ void showTvArtistModal({
   );
 }
 
-/// Muestra el menú contextual de opciones de una canción
-void showTvSongOptionsModal({
-  required LocalSong song,
-  required AppThemeMode mode,
-}) {
-  final isAdo = AdoHandler.isAdo(song);
 
-  GlobalModalService.show(
-    title: song.title,
-    icon: isAdo ? Ionicons.star : Ionicons.musical_note,
-    primaryColor: isAdo ? Colors.blue.shade900 : null,
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _modalOption(
-          icon: Ionicons.play_forward,
-          label: 'Reproducir siguiente',
-          onTap: () {
-            AudioPlayerManager().addNext(song);
-            final ctx = GlobalModalService.navigatorKey.currentContext!;
-            Navigator.pop(ctx);
-            CustomToastService.show(
-              ctx,
-              message: 'Siguiente: ${song.title}',
-              type: ToastType.info,
-              icon: Ionicons.play_forward,
-            );
-          },
-          mode: mode,
-        ),
-        const SizedBox(height: 4),
-
-        ValueListenableBuilder<List<String>>(
-          valueListenable: FavoritesManager().favoritePathsNotifier,
-          builder: (context, paths, _) {
-            final isFav = paths.contains(song.path);
-            return _modalOption(
-              icon: isFav ? Ionicons.heart : Ionicons.heart_outline,
-              label: isFav ? 'Quitar de Favoritos' : 'Agregar a Favoritos',
-              onTap: () async {
-                final ctx = GlobalModalService.navigatorKey.currentContext!;
-                if (isFav) {
-                  final isMain = await FavoritesManager().isMainFavorite(song);
-                  if (isMain) {
-                    Navigator.pop(ctx);
-                    CustomToastService.show(
-                      ctx,
-                      message: 'No se puede quitar: es la principal',
-                      type: ToastType.error,
-                    );
-                    return;
-                  }
-                  final ok = await FavoritesManager().removeFavorite(song);
-                  Navigator.pop(ctx);
-                  if (ok) {
-                    CustomToastService.show(
-                      ctx,
-                      message: 'Quitado de Favoritos',
-                      type: ToastType.warning,
-                    );
-                  } else {
-                    CustomToastService.show(
-                      ctx,
-                      message: 'No se pudo quitar',
-                      type: ToastType.error,
-                    );
-                  }
-                } else {
-                  await FavoritesManager().addFavorite(song);
-                  Navigator.pop(ctx);
-                  CustomToastService.show(
-                    ctx,
-                    message: 'Añadido a Favoritos ❤️',
-                    type: ToastType.success,
-                  );
-                }
-              },
-              mode: mode,
-              iconColor: isFav ? (isAdo ? Colors.blue : Colors.red) : null,
-            );
-          },
-        ),
-        const SizedBox(height: 4),
-
-        _modalOption(
-          icon: Ionicons.list,
-          label: 'Añadir a Playlist',
-          onTap: () {
-            Navigator.pop(GlobalModalService.navigatorKey.currentContext!);
-            PlaylistActionService.showAddToPlaylistDialog(
-              GlobalModalService.navigatorKey.currentContext!,
-              song,
-            );
-          },
-          mode: mode,
-        ),
-      ],
-    ),
-    actions: [
-      ModalActionButton(
-        label: 'Cerrar',
-        onPressed: () =>
-            Navigator.pop(GlobalModalService.navigatorKey.currentContext!),
-        color: Colors.grey,
-      ),
-    ],
-  );
-}
-
-/// Crea una opción estilizada para un modal
 Widget _modalOption({
   required IconData icon,
   required String label,

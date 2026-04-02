@@ -14,13 +14,11 @@ class PlaylistManager {
   final Map<String, ValueNotifier<List<String>>> _playlistSongsNotifiers = {};
   final Map<String, ValueNotifier<String?>> _playlistCoverNotifiers = {};
 
-  /// Carga las playlists guardadas
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     playlistsNotifier.value = prefs.getStringList('playlist_names') ?? [];
   }
 
-  /// Obtiene el notificador de canciones de una playlist
   ValueNotifier<List<String>> getSongsNotifier(String playlistName) {
     if (!_playlistSongsNotifiers.containsKey(playlistName)) {
       _playlistSongsNotifiers[playlistName] = ValueNotifier([]);
@@ -29,7 +27,6 @@ class PlaylistManager {
     return _playlistSongsNotifiers[playlistName]!;
   }
 
-  /// Obtiene el notificador de portada de una playlist
   ValueNotifier<String?> getCoverNotifier(String playlistName) {
     if (!_playlistCoverNotifiers.containsKey(playlistName)) {
       _playlistCoverNotifiers[playlistName] = ValueNotifier(null);
@@ -38,21 +35,18 @@ class PlaylistManager {
     return _playlistCoverNotifiers[playlistName]!;
   }
 
-  /// Carga las canciones de una playlist
   Future<void> _loadPlaylistSongs(String playlistName) async {
     final prefs = await SharedPreferences.getInstance();
     final songs = prefs.getStringList('playlist_songs_$playlistName') ?? [];
     _playlistSongsNotifiers[playlistName]?.value = songs;
   }
 
-  /// Carga la portada de una playlist
   Future<void> _loadPlaylistCover(String playlistName) async {
     final prefs = await SharedPreferences.getInstance();
     final cover = prefs.getString('playlist_cover_$playlistName');
     _playlistCoverNotifiers[playlistName]?.value = cover;
   }
 
-  /// Crea una nueva playlist
   Future<void> createPlaylist(String name) async {
     if (name.isEmpty || playlistsNotifier.value.contains(name)) return;
     final prefs = await SharedPreferences.getInstance();
@@ -61,7 +55,6 @@ class PlaylistManager {
     await prefs.setStringList('playlist_names', newList);
   }
 
-  /// Elimina una playlist
   Future<void> deletePlaylist(String name) async {
     final prefs = await SharedPreferences.getInstance();
     final newList = List<String>.from(playlistsNotifier.value)..remove(name);
@@ -73,7 +66,6 @@ class PlaylistManager {
     _playlistCoverNotifiers.remove(name);
   }
 
-  /// Renombra una playlist
   Future<void> renamePlaylist(String oldName, String newName) async {
     if (newName.isEmpty || playlistsNotifier.value.contains(newName)) return;
     final prefs = await SharedPreferences.getInstance();
@@ -96,7 +88,6 @@ class PlaylistManager {
     await prefs.remove('playlist_cover_$oldName');
   }
 
-  /// Añade una canción a una playlist
   Future<void> addSongToPlaylist(String playlistName, LocalSong song) async {
     final prefs = await SharedPreferences.getInstance();
     final currentSongs =
@@ -109,7 +100,6 @@ class PlaylistManager {
     }
   }
 
-  /// Elimina una canción de una playlist
   Future<void> removeSongFromPlaylist(
     String playlistName,
     String songPath,
@@ -123,14 +113,12 @@ class PlaylistManager {
     }
   }
 
-  /// Establece la portada de una playlist
   Future<void> setPlaylistCover(String playlistName, String songPath) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('playlist_cover_$playlistName', songPath);
     _playlistCoverNotifiers[playlistName]?.value = songPath;
   }
 
-  /// Crea o actualiza una playlist automática con las canciones dadas
   Future<void> createOrUpdateAutoPlaylist(
     String name,
     List<LocalSong> songs,
@@ -138,18 +126,15 @@ class PlaylistManager {
     final prefs = await SharedPreferences.getInstance();
     final paths = songs.map((s) => s.path).toList();
 
-    // Registrar la playlist si no existe
     if (!playlistsNotifier.value.contains(name)) {
       final newList = List<String>.from(playlistsNotifier.value)..add(name);
       playlistsNotifier.value = newList;
       await prefs.setStringList('playlist_names', newList);
     }
 
-    // Sobreescribir canciones
     await prefs.setStringList('playlist_songs_$name', paths);
     _playlistSongsNotifiers[name]?.value = List.from(paths);
 
-    // Portada = primera canción de la lista
     if (paths.isNotEmpty) {
       await prefs.setString('playlist_cover_$name', paths.first);
       _playlistCoverNotifiers[name]?.value = paths.first;

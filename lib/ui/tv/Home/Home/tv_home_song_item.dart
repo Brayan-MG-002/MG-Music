@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Elemento de canción del grid TV
+// Representación visual de una canción en la cuadrícula de TV, con soporte para estados de reproducción, Ado y carga diferida (shimmer).
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
@@ -24,7 +24,6 @@ class TvHomeSongItem extends StatelessWidget {
   });
 
   @override
-  /// Construye la tarjeta de canción con estados Ado y reproducción
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return ValueListenableBuilder<LocalSong?>(
@@ -47,14 +46,14 @@ class TvHomeSongItem extends StatelessWidget {
                 colors: AppColors.songItemGradient(mode),
               ),
               border: isPlaying
-                  ? Border.all(color: Colors.blueAccent, width: 2.5)
+                  ? Border.all(color: AppColors.primaryBlueMid, width: 2.5)
                   : isAdo
-                  ? Border.all(color: Colors.blue.shade900, width: 1.5)
+                  ? Border.all(color: AppColors.primaryBlue, width: 1.5)
                   : Border.all(color: Colors.white.withOpacity(0.05), width: 1),
               boxShadow: isPlaying
                   ? [
                       BoxShadow(
-                        color: Colors.blueAccent.withOpacity(0.5),
+                        color: AppColors.primaryBlueMid.withOpacity(0.5),
                         blurRadius: 18,
                         spreadRadius: 2,
                       ),
@@ -101,7 +100,7 @@ class TvHomeSongItem extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.blue.shade900.withOpacity(0.85),
+                                color: AppColors.primaryBlue.withOpacity(0.85),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Text(
@@ -123,7 +122,7 @@ class TvHomeSongItem extends StatelessWidget {
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   Colors.transparent,
-                                  Colors.blue.shade900.withOpacity(0.7),
+                                  AppColors.primaryBlue.withOpacity(0.7),
                                 ],
                               ),
                             ),
@@ -151,7 +150,7 @@ class TvHomeSongItem extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: isPlaying
-                          ? Colors.blueAccent
+                          ? AppColors.primaryBlueMid
                           : AppColors.textPrimary(mode),
                       fontSize: 11,
                       fontWeight: isPlaying || isAdo
@@ -182,7 +181,6 @@ class _TvHomeSongShimmerItemState extends State<TvHomeSongShimmerItem>
   late Animation<double> _anim;
 
   @override
-  /// Inicializa la animación shimmer
   void initState() {
     super.initState();
     _ctrl = AnimationController(
@@ -193,14 +191,12 @@ class _TvHomeSongShimmerItemState extends State<TvHomeSongShimmerItem>
   }
 
   @override
-  /// Libera recursos de la animación
   void dispose() {
     _ctrl.dispose();
     super.dispose();
   }
 
   @override
-  /// Construye el contenedor shimmer animado
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _anim,

@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Barra de acciones del home TV (filtros, orden, reproductor)
+// Barra de herramientas superior para el Inicio en TV, con acceso a filtros, ordenamiento y controles de reproducción mini.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
@@ -24,7 +24,6 @@ class TvHomeTopBar extends StatelessWidget {
   });
 
   @override
-  /// Construye la barra con acciones y reproductor mini
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
@@ -96,7 +95,6 @@ class _TvTopBarButton extends StatelessWidget {
   });
 
   @override
-  /// Construye un botón tipo chip para la barra
   Widget build(BuildContext context) {
     return TvFocusableItem(
       onTap: onTap,

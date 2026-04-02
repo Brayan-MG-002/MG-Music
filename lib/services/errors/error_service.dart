@@ -54,7 +54,6 @@ class ErrorService {
     if (errorCode.contains('abort') || 
         errorStr.contains('abort') || 
         errorStr.contains('interrupted')) {
-      debugPrint('ℹ️ Ignorando error de interrupción/aborto: $errorCode');
       return;
     }
 

@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Servicio de Alertas Personalizadas (Toast) con estilo Neon/Ado
+// Servicio global para la visualización de notificaciones tipo Toast con estética premium, soporte para colas de mensajes y desenfoque de fondo.
 
 import 'dart:async';
 import 'dart:collection';
@@ -7,11 +7,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/services/ui/global_modal_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
-/// Tipos de alerta para determinar colores e iconos
 enum ToastType { info, success, error, warning, ado }
 
-/// Servicio global para mostrar alertas tipo "Toast"
 class CustomToastService {
   static final Queue<_ToastRequest> _queue = Queue<_ToastRequest>();
 
@@ -19,7 +18,6 @@ class CustomToastService {
 
   static const int _maxVisibleToasts = 2;
 
-  /// Muestra una alerta personalizada
   static void show(
     BuildContext context, {
     required String message,
@@ -39,7 +37,6 @@ class CustomToastService {
     _processQueue();
   }
 
-  /// Procesa la cola y muestra alertas si hay espacio
   static void _processQueue() {
     if (_queue.isEmpty) return;
 
@@ -51,7 +48,6 @@ class CustomToastService {
     _showToast(request);
   }
 
-  /// Construye e inserta la alerta en el overlay
   static void _showToast(_ToastRequest request) {
     final overlayState = GlobalModalService.navigatorKey.currentState?.overlay;
 
@@ -85,7 +81,6 @@ class CustomToastService {
     }
   }
 
-  /// Elimina una alerta de la lista activa y del overlay
   static void _removeToast(_ToastEntry entry) {
     if (_activeToasts.contains(entry)) {
       entry.overlayEntry.remove();
@@ -131,7 +126,6 @@ class CustomToastService {
   }
 }
 
-/// Modelo de datos para una solicitud de Toast
 class _ToastRequest {
   final String message;
   final ToastType type;
@@ -148,7 +142,6 @@ class _ToastRequest {
   });
 }
 
-/// Referencia a una alerta activa
 class _ToastEntry {
   final OverlayEntry overlayEntry;
   final _ToastRequest request;
@@ -156,7 +149,6 @@ class _ToastEntry {
   _ToastEntry({required this.overlayEntry, required this.request});
 }
 
-/// Widget visual de la alerta con animaciones
 class _ToastWidget extends StatefulWidget {
   final _ToastRequest request;
   final int index; // 0 es el de más abajo, 1 el de arriba
@@ -180,11 +172,10 @@ class _ToastWidgetState extends State<_ToastWidget>
   late Animation<Offset> _slideAnimation;
   Timer? _timer;
 
-  final double _baseBottomPadding = 80.0;
-  final double _itemHeightWithPadding = 85.0;
+  final double _baseBottomPadding = 100.0.h;
+  final double _itemHeightWithPadding = 70.0.h;
 
   @override
-  /// Inicializa animaciones y temporizador de cierre
   void initState() {
     super.initState();
 
@@ -219,7 +210,6 @@ class _ToastWidgetState extends State<_ToastWidget>
     });
   }
 
-  /// Cierra la alerta con animación
   Future<void> _close() async {
     if (!mounted) return;
     await _controller.reverse();
@@ -229,7 +219,6 @@ class _ToastWidgetState extends State<_ToastWidget>
   }
 
   @override
-  /// Libera recursos
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
@@ -237,15 +226,16 @@ class _ToastWidgetState extends State<_ToastWidget>
   }
 
   @override
-  /// Construye la posición y transiciones de la alerta
   Widget build(BuildContext context) {
     final bottomPosition =
-        _baseBottomPadding + (widget.index * _itemHeightWithPadding);
+        _baseBottomPadding +
+        (widget.index * _itemHeightWithPadding) +
+        MediaQuery.of(context).padding.bottom;
 
     return Positioned(
       bottom: bottomPosition,
-      left: 20,
-      right: 20,
+      left: 20.w,
+      right: 20.w,
       child: Material(
         color: Colors.transparent,
         child: SlideTransition(
@@ -272,48 +262,51 @@ class _ToastWidgetState extends State<_ToastWidget>
     );
   }
 
-  /// Construye el contenido visual del toast
   Widget _buildContent() {
     final color = widget.request.color;
+    final isCompact = MediaQuery.of(context).size.height < 700;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(30),
+      borderRadius: BorderRadius.circular(30.r),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 400),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          constraints: BoxConstraints(maxWidth: 400.w),
+          padding: EdgeInsets.symmetric(
+            horizontal: 20.w,
+            vertical: isCompact ? 8.h : 12.h,
+          ),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [color.withOpacity(0.15), Colors.black.withOpacity(0.8)],
             ),
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(30.r),
             border: Border.all(
               color: color.withOpacity(0.6),
-              width: 1.5,
+              width: 1.5.w,
             ),
             boxShadow: [
               BoxShadow(
                 color: color.withOpacity(0.3),
-                blurRadius: 15,
-                spreadRadius: 1,
+                blurRadius: 15.r,
+                spreadRadius: 1.r,
               ),
             ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.request.icon, color: color, size: 24),
-              const SizedBox(width: 12),
+              Icon(widget.request.icon, color: color, size: 24.r),
+              SizedBox(width: 12.w),
               Flexible(
                 child: Text(
                   widget.request.message,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontSize: isCompact ? 12.sp : 13.5.sp,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

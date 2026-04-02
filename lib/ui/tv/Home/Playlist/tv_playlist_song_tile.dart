@@ -1,4 +1,5 @@
-// Tarjeta de canción dentro del detalle de playlist (TV)
+// Copyright © 2026 Brayan Medrano - MG Music
+// Representación visual de una canción dentro de una lista de reproducción para TV, con soporte para selección múltiple en modo eliminación.
 import 'package:flutter/material.dart';
 import 'package:mg_music/services/models/song_model.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
@@ -22,7 +23,6 @@ class TvPlaylistSongTile extends StatelessWidget {
   });
 
   @override
-  /// Construye la tarjeta de canción con soporte a modo eliminar
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return TvFocusableItem(

@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Widget reproductor compacto TV
+// Reproductor compacto para la interfaz de TV, con carátula rotatoria y barra de progreso simplificada.
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -17,7 +17,6 @@ class TvPlayerWidget extends StatelessWidget {
   const TvPlayerWidget({super.key, this.onTap});
 
   @override
-  /// Construye el mini reproductor con carátula, progreso y controles
   Widget build(BuildContext context) {
     final playerManager = AudioPlayerManager();
     final mode = context.watch<ThemeService>().mode;
@@ -105,11 +104,11 @@ class TvPlayerWidget extends StatelessWidget {
                                                 colors: mode ==
                                                         AppThemeMode.dark
                                                     ? [
-                                                        Colors.blue.shade900,
+                                                        AppColors.primaryBlue,
                                                         Colors.black
                                                       ]
                                                     : [
-                                                        Colors.blue.shade500,
+                                                        AppColors.primaryBlueMid,
                                                         Colors.white
                                                       ],
                                               ),
@@ -191,7 +190,6 @@ class _RotatingArtworkState extends State<RotatingArtwork>
   late AnimationController _controller;
 
   @override
-  /// Inicializa el controlador y sincroniza con el estado de reproducción
   void initState() {
     super.initState();
     _controller = AnimationController(
@@ -204,7 +202,6 @@ class _RotatingArtworkState extends State<RotatingArtwork>
   }
 
   @override
-  /// Libera recursos y quita listeners
   void dispose() {
     widget.isPlayingNotifier.removeListener(_checkPlaybackState);
     _controller.dispose();
@@ -220,7 +217,6 @@ class _RotatingArtworkState extends State<RotatingArtwork>
   }
 
   @override
-  /// Dibuja la carátula con rotación animada
   Widget build(BuildContext context) {
     return RotationTransition(
       turns: _controller,

@@ -17,8 +17,14 @@ import 'package:mg_music/services/ui/responsive_service.dart';
 class MobileMiniPlayer extends StatefulWidget {
   final VoidCallback? onTap;
   final bool showVisualizer;
+  final bool isSpecialExpanded;
 
-  const MobileMiniPlayer({super.key, this.onTap, this.showVisualizer = false});
+  const MobileMiniPlayer({
+    super.key, 
+    this.onTap, 
+    this.showVisualizer = false,
+    this.isSpecialExpanded = false,
+  });
 
   @override
   State<MobileMiniPlayer> createState() => _MobileMiniPlayerState();
@@ -170,8 +176,8 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
                           }
                         },
                         child: Container(
-                          height: (AdoHandler.isAdo(song) ? 54.0 : 48.0).h
-                              .clamp(40.0, 60.0),
+                          height: (AdoHandler.isAdo(song) ? 58.0 : 50.0).h
+                              .clamp(40.0, 75.0),
                           padding: EdgeInsets.symmetric(
                             horizontal: 8.w,
                             vertical: 2.h,
@@ -224,9 +230,11 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
                                 ),
                               );
                             },
-                        child: widget.showVisualizer
-                            ? _buildVisualizer(mode)
-                            : _buildSongInfo(song, isPlaying, manager, mode),
+                        child: widget.isSpecialExpanded
+                            ? _buildSpecialTitleMode(song, mode)
+                            : widget.showVisualizer
+                                ? _buildVisualizer(mode)
+                                : _buildSongInfo(song, isPlaying, manager, mode),
                       ),
                     ),
                   ),
@@ -371,19 +379,25 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
         ),
         IconButton(
           icon: Icon(isPlaying ? Ionicons.pause : Ionicons.play),
-          iconSize: 18.r,
+          iconSize: (widget.isSpecialExpanded ? 16 : 18).r,
           color: AppColors.icon(mode),
           onPressed: manager.togglePlayPause,
           padding: EdgeInsets.zero,
-          constraints: BoxConstraints(minWidth: 32.w, minHeight: 32.h),
+          constraints: BoxConstraints(
+            minWidth: (widget.isSpecialExpanded ? 28 : 32).w,
+            minHeight: (widget.isSpecialExpanded ? 28 : 32).h,
+          ),
         ),
         IconButton(
           icon: const Icon(Ionicons.play_skip_forward),
-          iconSize: 18.r,
+          iconSize: (widget.isSpecialExpanded ? 16 : 18).r,
           color: AppColors.icon(mode),
           onPressed: manager.next,
           padding: EdgeInsets.zero,
-          constraints: BoxConstraints(minWidth: 32.w, minHeight: 32.h),
+          constraints: BoxConstraints(
+            minWidth: (widget.isSpecialExpanded ? 28 : 32).w,
+            minHeight: (widget.isSpecialExpanded ? 28 : 32).h,
+          ),
         ),
       ],
     );
@@ -418,6 +432,48 @@ class _MobileMiniPlayerState extends State<MobileMiniPlayer>
             },
           );
         }),
+      ),
+    );
+  }
+
+  /// Construye info centrada de título y artista para el modo especial
+  Widget _buildSpecialTitleMode(LocalSong song, AppThemeMode mode) {
+    return Container(
+      key: const ValueKey('special_title_mode'),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 2.h),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              song.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textPrimary(mode),
+                fontSize: 12.sp,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          SizedBox(height: 1.h),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              song.artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary(mode),
+                fontSize: 10.sp,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

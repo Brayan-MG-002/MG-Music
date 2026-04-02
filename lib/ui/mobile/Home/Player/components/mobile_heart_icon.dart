@@ -7,7 +7,6 @@ import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/services/models/song_model.dart';
-import 'package:palette_generator/palette_generator.dart';
 import 'package:mg_music/services/ui/responsive_service.dart';
 
 class MobileHeartIcon extends StatefulWidget {
@@ -34,17 +33,15 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
   late AnimationController _shakeController;
   late AnimationController _explosionController;
   late AnimationController _normalBumpController;
+  late AnimationController _colorTransitionController;
 
   Timer? _shakeTimer;
   Timer? _adoActivationTimer;
   bool _adoAnimationsActive = false;
-  Color? _dominantColor;
-  Color? _secondaryColor;
   bool _particlesActive = false;
   final math.Random _random = math.Random();
 
   @override
-  /// Inicializa controladores y programa activación de animaciones
   void initState() {
     super.initState();
 
@@ -73,10 +70,18 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
       duration: const Duration(milliseconds: 600),
     );
 
+    _colorTransitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    if (widget.isFavorite) {
+      _colorTransitionController.value = 1.0;
+    }
+
     _startAdoActivationDelay();
   }
 
-  /// Activa animaciones de Ado con breve retardo
   void _startAdoActivationDelay() {
     _adoActivationTimer?.cancel();
     _adoAnimationsActive = false;
@@ -84,10 +89,7 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
     if (widget.isAdo) {
       _adoActivationTimer = Timer(const Duration(milliseconds: 200), () {
         if (mounted) {
-          setState(() {
-            _adoAnimationsActive = true;
-          });
-          _extractDominantColor();
+          setState(() => _adoAnimationsActive = true);
           _setupAnimations();
         }
       });
@@ -95,12 +97,10 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
         _pulseController.repeat(reverse: true);
       }
     } else {
-      _extractDominantColor();
       _setupAnimations();
     }
   }
 
-  /// Configura animaciones según si es Ado y favorito
   void _setupAnimations() {
     if (widget.isAdo && _adoAnimationsActive) {
       _pulseController.repeat(reverse: true);
@@ -110,12 +110,11 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
     }
   }
 
-  /// Inicia una sacudida en intervalos aleatorios
   void _startRandomShake() {
     _shakeTimer?.cancel();
     if (!mounted || !widget.isAdo) return;
 
-    final delay = 3 + _random.nextInt(6);
+    final delay = 4 + _random.nextInt(5);
     _shakeTimer = Timer(Duration(seconds: delay), () {
       if (mounted) {
         _shakeController.forward(from: 0.0);
@@ -124,42 +123,11 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
     });
   }
 
-  /// Obtiene colores dominantes del artwork para efectos
-  Future<void> _extractDominantColor() async {
-    if (!widget.isAdo) return;
-
-    if (widget.song?.artwork != null) {
-      try {
-        final imageProvider = MemoryImage(widget.song!.artwork!);
-        final palette = await PaletteGenerator.fromImageProvider(
-          imageProvider,
-          maximumColorCount: 10,
-        );
-        if (mounted) {
-          setState(() {
-            _dominantColor =
-                palette.dominantColor?.color ?? palette.vibrantColor?.color;
-            _secondaryColor =
-                palette.lightVibrantColor?.color ??
-                palette.darkVibrantColor?.color ??
-                Colors.blueAccent;
-          });
-
-        }
-      } catch (e) {
-        debugPrint("Color extraction failed: $e");
-      }
-    } else {
-    }
-  }
-
   @override
-  /// Resetea y dispara animaciones según cambios de props
   void didUpdateWidget(MobileHeartIcon oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.song?.id != widget.song?.id) {
-      _dominantColor = null;
       _adoAnimationsActive = false;
       _pulseController.stop();
       _pulseController.reset();
@@ -167,10 +135,17 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
       _shakeController.stop();
       _explosionController.stop();
       _particlesActive = false;
+      
+      if (widget.isFavorite) {
+        _colorTransitionController.value = 1.0;
+      } else {
+        _colorTransitionController.value = 0.0;
+      }
 
       _startAdoActivationDelay();
     } else if (oldWidget.isFavorite != widget.isFavorite) {
-      if (!oldWidget.isFavorite && widget.isFavorite) {
+      if (widget.isFavorite) {
+        _colorTransitionController.forward();
         if (widget.isAdo && _adoAnimationsActive) {
           setState(() => _particlesActive = true);
           _explosionController.forward(from: 0.0);
@@ -180,6 +155,7 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
             _pulseController.repeat(reverse: true);
         }
       } else {
+        _colorTransitionController.reverse();
         _pulseController.stop();
         _pulseController.reset();
       }
@@ -187,7 +163,6 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
   }
 
   @override
-  /// Libera timers y controladores
   void dispose() {
     _adoActivationTimer?.cancel();
     _shakeTimer?.cancel();
@@ -195,19 +170,23 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
     _shakeController.dispose();
     _explosionController.dispose();
     _normalBumpController.dispose();
+    _colorTransitionController.dispose();
     super.dispose();
   }
 
   @override
-  /// Construye el ícono de favorito con animaciones (Ado y estándar)
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
-
     final bool isAdoActive = widget.isAdo && _adoAnimationsActive;
-    final adoBaseColor = _dominantColor ?? AppColors.primaryBlueMid;
-    final favoriteColor = isAdoActive ? adoBaseColor : Colors.redAccent;
-    final idleColor = AppColors.textSecondary(mode);
-    final isAdoFav = isAdoActive && widget.isFavorite;
+    
+    // Colores base de Ado desde ThemeService/AppColors (dinámicos)
+    final dynamicColor = AppColors.primaryBlueMid;
+    final dynamicLight = AppColors.primaryBlueLight;
+    
+    // Color principal de la app (azul estático para estado idle)
+    const staticBlue = Color(0xFF1565C0);
+    final idleColor = isAdoActive ? staticBlue : AppColors.textSecondary(mode);
+    final favoriteSolidColor = isAdoActive ? dynamicColor : Colors.redAccent;
 
     return RepaintBoundary(
       child: GestureDetector(
@@ -217,7 +196,7 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            // Capa de Partículas (Solo Ado)
+            // Capa de Partículas (Solo Ado al agregar favorito)
             if (_particlesActive && isAdoActive)
               ...List.generate(6, (index) {
                 final angle = (index * 60) * math.pi / 180;
@@ -227,9 +206,7 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
                 return AnimatedBuilder(
                   animation: _explosionController,
                   builder: (context, child) {
-                    final t = Curves.easeOutCubic.transform(
-                      _explosionController.value,
-                    );
+                    final t = Curves.easeOutCubic.transform(_explosionController.value);
                     final distance = 75.0.w * t;
                     final opacity = 1.0 - t;
                     final dX = cachedCos * distance;
@@ -248,140 +225,135 @@ class _MobileHeartIconState extends State<MobileHeartIcon>
                   },
                   child: Icon(
                     Ionicons.heart,
-                    color: adoBaseColor.withOpacity(0.8),
+                    color: dynamicColor.withOpacity(0.8),
                     size: 20.r,
                   ),
                 );
               }),
 
-            // Ícono Principal
+            // Ícono Principal con transiciones y efectos
             AnimatedBuilder(
               animation: Listenable.merge([
                 _pulseController,
                 _shakeController,
                 _explosionController,
                 _normalBumpController,
+                _colorTransitionController,
               ]),
-              builder: (context, staticHeart) {
+              builder: (context, _) {
                 double scale = 1.0;
                 double offsetX = 0.0;
                 double rotate = 0.0;
+                final transition = Curves.easeInOut.transform(_colorTransitionController.value);
 
                 // 1. Transformaciones Normales
                 if (!isAdoActive) {
                   if (_normalBumpController.isAnimating) {
                     final t = _normalBumpController.value;
-                    final bump =
-                        math.sin(t * math.pi) *
-                        Curves.easeOutCubic.transform(t);
+                    final bump = math.sin(t * math.pi) * Curves.easeOutCubic.transform(t);
                     scale = 1.0 + (bump * 0.4);
                   } else if (widget.isFavorite) {
-                    final t = Curves.easeInOutCubic.transform(
-                      _pulseController.value,
-                    );
+                    final t = Curves.easeInOutCubic.transform(_pulseController.value);
                     scale = 1.0 + (t * 0.15);
                   }
-                }
-
-                // 2. Transformaciones Ado
-                if (isAdoActive) {
-                  final t = Curves.easeInOutCubic.transform(
-                    _pulseController.value,
-                  );
-                  scale = 1.0 + (t * 0.25);
+                } else {
+                  // 2. Transformaciones Ado (Pulso y sacudidas)
+                  final tPulse = Curves.easeInOutCubic.transform(_pulseController.value);
+                  scale = 1.0 + (tPulse * 0.22); // Pulso ligeramente más suave para ser "premium"
 
                   if (_shakeController.isAnimating) {
                     final tShake = _shakeController.value;
                     offsetX = math.sin(tShake * math.pi * 4) * 1.5.w;
-                    rotate = math.sin(tShake * math.pi * 4) * 0.04;
-
-                    if (widget.isFavorite) {
-                      scale += math.sin(tShake * math.pi) * 0.08;
-                    }
+                    rotate = math.sin(tShake * math.pi * 4) * 0.03;
+                    if (widget.isFavorite) scale += math.sin(tShake * math.pi) * 0.06;
                   }
 
                   if (_explosionController.isAnimating) {
                     final tExplode = _explosionController.value;
-                    final bounce =
-                        math.sin(tExplode * math.pi) *
-                        Curves.elasticOut.transform(tExplode);
-                    scale = 1.0 + (bounce * 0.5);
-
-                    final shakeIntensity = 1.0 - tExplode;
-                    rotate +=
-                        (math.sin(tExplode * math.pi * 10) * 0.15) *
-                        shakeIntensity;
+                    final bounce = math.sin(tExplode * math.pi) * Curves.elasticOut.transform(tExplode);
+                    scale = 1.0 + (bounce * 0.45);
+                    rotate += (math.sin(tExplode * math.pi * 10) * 0.12) * (1.0 - tExplode);
                   }
                 }
 
-                Widget finalHeart = staticHeart!;
+                // Color animado entre Idle y Favorite
+                final currentColor = Color.lerp(idleColor, favoriteSolidColor, transition)!;
 
-                // Si es Ado y favorito, aplicamos el gradiente animado sobre el staticHeart
-                if (isAdoFav) {
-                  final color1 = adoBaseColor;
-                  final color2 = _secondaryColor ?? AppColors.primaryBlueLight;
-                  final t = _pulseController.value;
+                Widget heartIcon = Icon(
+                  widget.isFavorite ? Ionicons.heart : Ionicons.heart_outline,
+                  color: isAdoActive ? Colors.white : currentColor,
+                  size: 26.r,
+                );
 
-                  finalHeart = ShaderMask(
-                    shaderCallback: (Rect bounds) {
-                      final offset = t * math.pi;
-                      final xOffset = math.cos(offset) * 0.5;
-                      final yOffset = math.sin(offset) * 0.5;
+                if (isAdoActive) {
+                   // Efecto de Gradiente dinámico si es Ado y tiene transición activa
+                   if (transition > 0.01) {
+                     final pulseT = _pulseController.value;
+                     heartIcon = ShaderMask(
+                       blendMode: BlendMode.srcIn,
+                       shaderCallback: (Rect bounds) {
+                         final offset = pulseT * math.pi;
+                         final xOffset = math.cos(offset) * 0.4;
+                         final yOffset = math.sin(offset) * 0.4;
 
-                      return LinearGradient(
-                        colors: [color1, color2, color1],
-                        stops: const [0.0, 0.8, 2.0],
-                        begin: Alignment(-1.5 + xOffset, -1.5 + yOffset),
-                        end: Alignment(1.5 + xOffset, 1.5 + yOffset),
-                      ).createShader(bounds);
-                    },
-                    child: staticHeart,
-                  );
+                         // Mezclamos el color base con el gradiente basado en la animación de transición
+                         return LinearGradient(
+                           colors: [
+                             Color.lerp(staticBlue, dynamicColor, transition)!,
+                             Color.lerp(staticBlue, dynamicLight, transition)!,
+                             Color.lerp(staticBlue, dynamicColor, transition)!,
+                           ],
+                           stops: const [0.0, 0.5, 1.0],
+                           begin: Alignment(-1.2 + xOffset, -1.2 + yOffset),
+                           end: Alignment(1.2 + xOffset, 1.2 + yOffset),
+                         ).createShader(bounds);
+                       },
+                       child: Icon(
+                         Ionicons.heart,
+                         color: Colors.white,
+                         size: 26.r,
+                       ),
+                     );
+                   }
 
-                  // Resplandor exterior (optimizado)
-                  finalHeart = Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color2.withOpacity(0.5),
-                          blurRadius: 12.0.r,
-                          spreadRadius: 1.0.r,
-                        ),
-                      ],
-                    ),
-                    child: finalHeart,
-                  );
-
-                  // Delineado azul optimizado
-                  finalHeart = Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      finalHeart,
-                      Icon(
-                        Ionicons.heart_outline,
-                        color: Colors.blueAccent.withOpacity(0.35),
-                        size: 26.r,
-                      ),
-                    ],
-                  );
+                   // Brillo y Delineado para Ado (Solo si está marcado o transicionando)
+                   if (transition > 0.05) {
+                     heartIcon = Stack(
+                       alignment: Alignment.center,
+                       children: [
+                         // Resplandor optimizado
+                         Container(
+                           decoration: BoxDecoration(
+                             shape: BoxShape.circle,
+                             boxShadow: [
+                               BoxShadow(
+                                 color: dynamicLight.withOpacity(0.4 * transition),
+                                 blurRadius: (12.0 + (_pulseController.value * 8)).r,
+                                 spreadRadius: 1.0.r,
+                               ),
+                             ],
+                           ),
+                           child: heartIcon,
+                         ),
+                         // Delineado sutil
+                         Icon(
+                           Ionicons.heart_outline,
+                           color: Colors.blueAccent.withOpacity(0.25 * transition),
+                           size: 26.r,
+                         ),
+                       ],
+                     );
+                   }
                 }
 
                 return Transform.translate(
                   offset: Offset(offsetX, 0),
                   child: Transform.rotate(
                     angle: rotate,
-                    child: Transform.scale(scale: scale, child: finalHeart),
+                    child: Transform.scale(scale: scale, child: heartIcon),
                   ),
                 );
               },
-              child: Icon(
-                widget.isFavorite ? Ionicons.heart : Ionicons.heart_outline,
-                color: widget.isFavorite
-                    ? (isAdoActive ? Colors.white : favoriteColor)
-                    : idleColor,
-                size: 26.r,
-              ),
             ),
           ],
         ),

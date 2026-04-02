@@ -13,6 +13,7 @@ import 'package:mg_music/services/ui/global_modal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class EditPlaylistDialog extends StatefulWidget {
   final String playlistName;
@@ -38,7 +39,6 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
   Uint8List? _selectedCoverBytes;
 
   @override
-  /// Inicializa controller y carga carátula actual
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.playlistName);
@@ -47,7 +47,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     });
   }
 
-  /// Lee carátula inicial de preferencias
+
   Future<void> _loadInitialCover() async {
     final prefs = await SharedPreferences.getInstance();
     final coverId =
@@ -55,7 +55,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     await _selectCover(coverId, fromInit: true);
   }
 
-  /// Selecciona una carátula por identificador (logo, canción o archivo)
+
   Future<void> _selectCover(String identifier, {bool fromInit = false}) async {
     Uint8List? imageBytes;
     String effectiveIdentifier = identifier;
@@ -79,10 +79,16 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
       }
     } else if (identifier.startsWith('FILE:')) {
       final filePath = identifier.substring(5);
-      try {
-        imageBytes = await File(filePath).readAsBytes();
-      } catch (_) {
-        // Si el archivo no existe (p.ej. fue borrado), volvemos a default
+      final file = File(filePath);
+      
+      if (file.existsSync()) {
+        try {
+          imageBytes = await file.readAsBytes();
+        } catch (_) {}
+      }
+
+      if (imageBytes == null) {
+
         if (!fromInit) {
           CustomToastService.show(
             context,
@@ -102,7 +108,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     });
   }
 
-  /// Abre galería para elegir imagen local
+
   Future<void> _pickImageFromGallery() async {
     try {
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
@@ -118,7 +124,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     }
   }
 
-  /// Guarda cambios de nombre y carátula
+
   Future<void> _saveChanges() async {
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
@@ -148,7 +154,6 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
   }
 
   @override
-  /// Construye el contenido del diálogo de edición
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
@@ -156,30 +161,30 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nombre', style: TextStyle(color: AppColors.primaryBlueMid)),
-        const SizedBox(height: 8),
+        Text('Nombre', style: TextStyle(color: AppColors.primaryBlueMid, fontSize: 13.sp)),
+        SizedBox(height: 8.h),
         TextField(
           controller: _nameController,
           style: TextStyle(color: AppColors.textPrimary(mode)),
           decoration: InputDecoration(
             filled: true,
             fillColor: AppColors.surface(mode),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r)),
             enabledBorder: OutlineInputBorder(
               borderSide: BorderSide(color: AppColors.themeBorder(mode)),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(10.r),
             ),
             focusedBorder: OutlineInputBorder(
               borderSide: BorderSide(color: AppColors.primaryBlueMid),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(10.r),
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        Text('Carátula', style: TextStyle(color: AppColors.primaryBlueMid)),
-        const SizedBox(height: 10),
+        SizedBox(height: 20.h),
+        Text('Carátula', style: TextStyle(color: AppColors.primaryBlueMid, fontSize: 13.sp)),
+        SizedBox(height: 10.h),
         _buildCoverOptions(mode),
-        const SizedBox(height: 25),
+        SizedBox(height: 25.h),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -199,14 +204,14 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     );
   }
 
-  /// Construye opciones de carátula (default, logo, local y por canción)
+
   Widget _buildCoverOptions(AppThemeMode mode) {
     final songsWithArtwork = widget.songs
         .where((s) => s.artwork != null)
         .toList();
 
     return SizedBox(
-      height: 120,
+      height: 120.h,
       width: double.maxFinite,
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -216,7 +221,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
             child: Icon(
               Ionicons.musical_notes,
               color: AppColors.textPrimary(mode),
-              size: 40,
+              size: 40.r,
             ),
             label: 'Default',
             mode: mode,
@@ -233,7 +238,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
             child: Icon(
               Ionicons.folder_open,
               color: AppColors.textPrimary(mode),
-              size: 40,
+              size: 40.r,
             ),
             label: 'Local',
             mode: mode,
@@ -251,7 +256,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     );
   }
 
-  /// Construye un ítem de elección de carátula
+
   Widget _buildCoverChoice({
     required String identifier,
     required Widget child,
@@ -267,8 +272,8 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     return GestureDetector(
       onTap: onTap ?? () => _selectCover(identifier),
       child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 10),
+        width: 100.w,
+        margin: EdgeInsets.only(right: 10.w),
         child: Column(
           children: [
             Expanded(
@@ -277,12 +282,12 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
                 child: Container(
                   decoration: BoxDecoration(
                     border: isSelected
-                        ? Border.all(color: AppColors.primaryBlueMid, width: 3)
-                        : Border.all(color: Colors.transparent, width: 3),
-                    borderRadius: BorderRadius.circular(12),
+                        ? Border.all(color: AppColors.primaryBlueMid, width: 3.w)
+                        : Border.all(color: Colors.transparent, width: 3.w),
+                    borderRadius: BorderRadius.circular(12.r),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(8.r),
                     child:
                         identifier == 'PICK_LOCAL' &&
                             _selectedCoverIdentifier.startsWith('FILE:') &&
@@ -301,7 +306,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textSecondary(mode),
-                fontSize: 12,
+                fontSize: 12.sp,
               ),
             ),
           ],

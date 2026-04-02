@@ -4,12 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:mg_music/services/audio/audio_player_manager.dart';
 import 'package:mg_music/services/ui/bottom_modal_service.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/custom_toast_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StartupModeModal extends StatelessWidget {
   const StartupModeModal({super.key});
 
-  /// Abre el modal inferior para elegir el modo de inicio
+
   static void show(BuildContext context) async {
     final currentMode = AudioPlayerManager().startupModeNotifier.value;
     final prefs = await SharedPreferences.getInstance();
@@ -47,7 +48,7 @@ class StartupModeModal extends StatelessWidget {
     );
   }
 
-  /// Crea una opción de modo de inicio estilizada
+
   static BottomModalOption _createOption(
     BuildContext context,
     String title,
@@ -79,13 +80,17 @@ class StartupModeModal extends StatelessWidget {
           ? null
           : () {
               AudioPlayerManager().setStartupMode(value);
+              CustomToastService.show(
+                context,
+                message: "Inicio: $title",
+                type: ToastType.ado,
+              );
               Navigator.pop(context);
             },
     );
   }
 
   @override
-  /// Widget vacío, la UI se construye en el bottom modal
   Widget build(BuildContext context) {
     return const SizedBox.shrink();
   }

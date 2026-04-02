@@ -23,6 +23,8 @@ class SleepTimerBadge extends StatelessWidget {
   /// Construye el badge del temporizador o el título por defecto
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isShort = screenHeight < 600;
 
     return ValueListenableBuilder<DateTime?>(
       valueListenable: AudioPlayerManager().sleepEndTimeNotifier,
@@ -36,19 +38,14 @@ class SleepTimerBadge extends StatelessWidget {
               curve: Curves.easeInOut,
               padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
               decoration: BoxDecoration(
-                gradient: mode == AppThemeMode.dark
-                    ? LinearGradient(
-                        colors: [
-                          Colors.blue.shade900.withOpacity(0.6),
-                          Colors.black.withOpacity(0.5),
-                        ],
-                      )
-                    : LinearGradient(
-                        colors: [
-                          Colors.blue.shade300.withOpacity(0.6),
-                          Colors.white.withOpacity(0.5),
-                        ],
-                      ),
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primaryBlueMid.withOpacity(0.6),
+                    mode == AppThemeMode.dark
+                        ? Colors.black.withOpacity(0.5)
+                        : Colors.white.withOpacity(0.5),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(20.r),
                 border: Border.all(
                   color: AppColors.themeBorder(mode),
@@ -61,10 +58,10 @@ class SleepTimerBadge extends StatelessWidget {
                       style: TextStyle(
                         color: AppColors.textPrimary(mode),
                         fontWeight: FontWeight.bold,
-                        fontSize: 16.sp,
+                        fontSize: (isShort ? 13 : 16).sp,
                       ),
                     )
-                  : _SleepCountdown(endTime: endTime, mode: mode),
+                  : _SleepCountdown(endTime: endTime, mode: mode, isShort: isShort),
             ),
           ),
         );
@@ -77,7 +74,8 @@ class SleepTimerBadge extends StatelessWidget {
 class _SleepCountdown extends StatelessWidget {
   final DateTime endTime;
   final AppThemeMode mode;
-  const _SleepCountdown({required this.endTime, required this.mode});
+  final bool isShort;
+  const _SleepCountdown({required this.endTime, required this.mode, required this.isShort});
 
   @override
   /// Construye el cronómetro con botón para cancelar temporizador
@@ -98,10 +96,8 @@ class _SleepCountdown extends StatelessWidget {
           children: [
             Icon(
               Ionicons.timer_outline,
-              color: mode == AppThemeMode.dark
-                  ? Colors.blue
-                  : Colors.blue.shade700,
-              size: 16.r,
+              color: AppColors.primaryBlueMid,
+              size: (isShort ? 14 : 16).r,
             ),
             SizedBox(width: 6.w),
             Text(
@@ -109,7 +105,7 @@ class _SleepCountdown extends StatelessWidget {
               style: TextStyle(
                 color: AppColors.textPrimary(mode),
                 fontWeight: FontWeight.bold,
-                fontSize: 14.sp,
+                fontSize: (isShort ? 12 : 14).sp,
               ),
             ),
             SizedBox(width: 8.w),
@@ -118,7 +114,7 @@ class _SleepCountdown extends StatelessWidget {
               child: Icon(
                 Ionicons.close_circle,
                 color: AppColors.textSecondary(mode),
-                size: 20.r,
+                size: (isShort ? 18 : 20).r,
               ),
             ),
           ],

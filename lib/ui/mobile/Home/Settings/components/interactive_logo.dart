@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import 'dart:typed_data';
-import 'package:palette_generator/palette_generator.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/audio/audio_player_manager.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class InteractiveLogo extends StatefulWidget {
   const InteractiveLogo({super.key});
@@ -22,13 +22,13 @@ class _InteractiveLogoState extends State<InteractiveLogo>
   late AnimationController _pulseController;
   Timer? _holdTimer;
   final AudioPlayerManager _audioManager = AudioPlayerManager();
-  Color _neonColor = Colors.blue.shade900;
   bool _isAdo = false;
+  String _appVersion = '';
 
   @override
-  /// Inicializa controladores y escucha cambios de canción
   void initState() {
     super.initState();
+    _loadAppVersion();
     _borderController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -57,8 +57,6 @@ class _InteractiveLogoState extends State<InteractiveLogo>
 
   void _checkCurrentSong() {
     final song = _audioManager.currentSongNotifier.value;
-    _updateColor(song?.artwork);
-
     final isAdo = song != null && AdoHandler.isAdo(song);
     if (_isAdo != isAdo) {
       setState(() => _isAdo = isAdo);
@@ -71,29 +69,12 @@ class _InteractiveLogoState extends State<InteractiveLogo>
     }
   }
 
-  /// Actualiza el color neón en base al artwork
-  Future<void> _updateColor(Uint8List? artwork) async {
-    if (artwork == null) {
-      if (mounted) setState(() => _neonColor = Colors.blue.shade900);
-      return;
-    }
-    try {
-      final generator = await PaletteGenerator.fromImageProvider(
-        ResizeImage(MemoryImage(artwork), width: 100, height: 100),
-        maximumColorCount: 5,
-      );
-      if (mounted) {
-        setState(() {
-          _neonColor = generator.dominantColor?.color ?? Colors.blue.shade900;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _neonColor = Colors.blue.shade900);
-    }
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
   }
 
   @override
-  /// Libera controladores y timers
   void dispose() {
     _audioManager.currentSongNotifier.removeListener(_checkCurrentSong);
     _borderController.dispose();
@@ -103,7 +84,6 @@ class _InteractiveLogoState extends State<InteractiveLogo>
     super.dispose();
   }
 
-  /// Inicia el gesto de mantener presionado para reproducir Ado aleatorio
   void _startHold() {
     if (_holdTimer != null) return;
     final adoSongs = _audioManager.playlist
@@ -127,9 +107,10 @@ class _InteractiveLogoState extends State<InteractiveLogo>
   }
 
   @override
-  /// Construye el logo interactivo con borde y texto reactivo
   Widget build(BuildContext context) {
-    final mode = context.watch<ThemeService>().mode;
+    final theme = context.watch<ThemeService>();
+    final mode = theme.mode;
+    final dynamicColor = AppColors.primaryBlueMid;
 
     return GestureDetector(
       onLongPressDown: (_) => _startHold(),
@@ -138,123 +119,108 @@ class _InteractiveLogoState extends State<InteractiveLogo>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TweenAnimationBuilder<Color?>(
-            duration: const Duration(milliseconds: 1000),
-            curve: Curves.linear,
-            tween: ColorTween(begin: Colors.blue.shade900, end: _neonColor),
-            builder: (context, animatedColor, _) {
-              return AnimatedBuilder(
-                animation: Listenable.merge([
-                  _borderController,
-                  _wobbleController,
-                  _pulseController,
-                ]),
-                builder: (context, child) {
-                  double rotation = 0;
-                  if (_wobbleController.isAnimating) {
-                    rotation =
-                        math.sin(_wobbleController.value * math.pi * 2) * 0.05;
-                  }
-                  double scale = 1.0;
-                  if (_pulseController.isAnimating) {
-                    scale = 1.0 + (_pulseController.value * 0.1);
-                  }
+          AnimatedBuilder(
+            animation: Listenable.merge([
+              _borderController,
+              _wobbleController,
+              _pulseController,
+            ]),
+            builder: (context, child) {
+              double rotation = 0;
+              if (_wobbleController.isAnimating) {
+                rotation = math.sin(_wobbleController.value * math.pi * 2) * 0.05;
+              }
+              double scale = 1.0;
+              if (_pulseController.isAnimating) {
+                scale = 1.0 + (_pulseController.value * 0.1);
+              }
 
-                  return RepaintBoundary(
-                    child: Transform.rotate(
-                      angle: rotation,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: _isAdo
-                              ? RadialGradient(
-                                  colors: [
-                                    (animatedColor ?? Colors.blue.shade900)
-                                        .withOpacity(0.5),
-                                    Colors.transparent,
-                                  ],
-                                  radius: 0.8,
-                                )
-                              : null,
-                        ),
-                        child: CustomPaint(
-                          foregroundPainter: LogoBorderPainter(
-                            progress: _borderController.value,
-                            color: animatedColor ?? Colors.blue.shade900,
-                            glowOpacity: _pulseController.value,
-                          ),
-                          child: Transform.scale(scale: scale, child: child),
-                        ),
-                      ),
+              return RepaintBoundary(
+                child: Transform.rotate(
+                  angle: rotation,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: _isAdo
+                          ? RadialGradient(
+                              colors: [
+                                dynamicColor.withOpacity(0.5),
+                                Colors.transparent,
+                              ],
+                              radius: 0.8.r,
+                            )
+                          : null,
                     ),
-                  );
-                },
-                child: Image.asset('assets/MG-I-T.png', width: 120),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          TweenAnimationBuilder<Color?>(
-            duration: const Duration(milliseconds: 600),
-            tween: ColorTween(begin: Colors.blue.shade900, end: _neonColor),
-            builder: (context, animatedNeonColor, _) {
-              return AnimatedSwitcher(
-                duration: const Duration(milliseconds: 1000),
-                switchInCurve: const Interval(
-                  0.5,
-                  1.0,
-                  curve: Curves.elasticOut,
-                ),
-                switchOutCurve: const Interval(0.0, 0.5, curve: Curves.easeIn),
-                transitionBuilder: (child, animation) =>
-                    ScaleTransition(scale: animation, child: child),
-                child: _isAdo
-                    ? RichText(
-                        key: const ValueKey('ado_text'),
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Music ',
-                              style: TextStyle(
-                                color: AppColors.textPrimary(mode),
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'Ado',
-                              style: TextStyle(
-                                color: animatedNeonColor,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                shadows: [
-                                  Shadow(
-                                    color: (animatedNeonColor ?? Colors.blue)
-                                        .withOpacity(0.8),
-                                    blurRadius: 15,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Text(
-                        'MG Music',
-                        key: const ValueKey('mg_text'),
-                        style: TextStyle(
-                          color: AppColors.textPrimary(mode),
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    child: CustomPaint(
+                      foregroundPainter: LogoBorderPainter(
+                        progress: _borderController.value,
+                        color: dynamicColor,
+                        glowOpacity: _pulseController.value,
                       ),
+                      child: Transform.scale(scale: scale, child: child),
+                    ),
+                  ),
+                ),
               );
             },
+            child: Image.asset(
+              'assets/MG-I-T.png',
+              width: ResponsiveService.screenHeight < 650 ? 90.r : 120.r,
+            ),
+          ),
+          SizedBox(height: ResponsiveService.screenHeight < 650 ? 10.h : 20.h),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 1000),
+            switchInCurve: const Interval(0.5, 1.0, curve: Curves.elasticOut),
+            switchOutCurve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+            child: _isAdo
+                ? RichText(
+                    key: const ValueKey('ado_text'),
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Music ',
+                          style: TextStyle(
+                            color: AppColors.textPrimary(mode),
+                            fontSize: ResponsiveService.screenHeight < 650 ? 22.sp : 28.sp,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'Ado',
+                          style: TextStyle(
+                            color: dynamicColor,
+                            fontSize: ResponsiveService.screenHeight < 650 ? 22.sp : 28.sp,
+                            fontWeight: FontWeight.bold,
+                            shadows: [
+                              Shadow(
+                                color: dynamicColor.withOpacity(0.8),
+                                blurRadius: 15.r,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Text(
+                    'MG Music',
+                    key: const ValueKey('mg_text'),
+                    style: TextStyle(
+                      color: AppColors.textPrimary(mode),
+                      fontSize: ResponsiveService.screenHeight < 650 ? 22.sp : 28.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
           Text(
-            'Versión 1.1.1',
-            style: TextStyle(color: AppColors.textSecondary(mode)),
+            _appVersion.isEmpty ? 'Versión ...' : 'Versión $_appVersion',
+            style: TextStyle(
+              color: AppColors.textSecondary(mode),
+              fontSize: 12.sp,
+            ),
           ),
         ],
       ),
@@ -274,7 +240,6 @@ class LogoBorderPainter extends CustomPainter {
   });
 
   @override
-  /// Dibuja el borde circular con glow animado
   void paint(Canvas canvas, Size size) {
     if (progress <= 0) return;
     final center = Offset(size.width / 2, size.height / 2);
@@ -299,7 +264,7 @@ class LogoBorderPainter extends CustomPainter {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
+      ..strokeWidth = 2.0.w
       ..strokeCap = StrokeCap.round;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
@@ -311,7 +276,6 @@ class LogoBorderPainter extends CustomPainter {
   }
 
   @override
-  /// Determina si debe repintarse
   bool shouldRepaint(LogoBorderPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.color != color ||

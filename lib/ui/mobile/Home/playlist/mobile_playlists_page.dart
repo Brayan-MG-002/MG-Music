@@ -22,10 +22,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class MobilePlaylistsPage extends StatefulWidget {
-  final VoidCallback
-  onStateChanged;
+  final VoidCallback onStateChanged;
   final VoidCallback? onOpenPlayer;
 
   const MobilePlaylistsPage({
@@ -45,24 +45,22 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
   final SongFetcher _songFetcher = SongFetcher();
   List<LocalSong> _allSongs = [];
 
-  // Estado
-  String?
-  _currentPlaylistName; // Si es null, mostramos la lista de playlists. Si tiene valor, mostramos el detalle.
+  String? _currentPlaylistName;
   List<LocalSong> _currentPlaylistSongs = [];
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = {};
   bool _isLoadingPlaylist = false;
   bool _isGridView = true; // Se carga de preferencias globales
+  final Map<String, Uint8List?> _playlistCoverCache = {};
+  final Map<String, Future<Uint8List?>> _pendingCoverFutures = {};
 
   bool get isInsidePlaylist => _currentPlaylistName != null;
   bool get isSelectionMode => _isSelectionMode;
 
   @override
-  /// Mantiene el estado al cambiar de pestañas
   bool get wantKeepAlive => true;
 
   @override
-  /// Inicializa modo de vista y carga canciones
   void initState() {
     super.initState();
     _loadViewMode();
@@ -80,7 +78,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     if (mounted) setState(() => _allSongs = songs);
   }
 
-  /// Carga la preferencia de vista (grilla/lista)
+
   Future<void> _loadViewMode() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
@@ -90,12 +88,12 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     }
   }
 
-  /// Refresca el modo de vista desde el MainScreen
+
   Future<void> refreshViewMode() async {
     await _loadViewMode();
   }
 
-  /// Vuelve a la lista de playlists
+
   void goBack() {
     if (_currentPlaylistName != null) {
       setState(() {
@@ -108,7 +106,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     }
   }
 
-  /// Reproduce la playlist actual si tiene canciones
+
   void playCurrentPlaylist() {
     if (_currentPlaylistSongs.isNotEmpty) {
       _playerManager.playSong(
@@ -118,7 +116,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     }
   }
 
-  /// Entra a selección o elimina seleccionados en detalle de playlist
+
   void handleDeleteAction() {
     if (!_isSelectionMode) {
       setState(() {
@@ -174,7 +172,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     }
   }
 
-  /// Abre el detalle de una playlist y carga sus canciones
+
   void _openPlaylist(String name) {
     setState(() {
       _currentPlaylistName = name;
@@ -182,6 +180,9 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
       _currentPlaylistSongs = [];
     });
     widget.onStateChanged();
+
+    // Asegurar que la carátula esté cargada antes de entrar
+    _getPlaylistArtworkCached(name, []);
 
     Future.delayed(const Duration(milliseconds: 100), () {
       if (!mounted) return;
@@ -200,7 +201,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     });
   }
 
-  /// Alterna selección de una canción
+
   void _toggleSelection(String id) {
     setState(() {
       if (_selectedIds.contains(id)) {
@@ -211,7 +212,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     });
   }
 
-  /// Tap sobre ítem: selecciona o reproduce/navega al player
+
   void _handleItemTap(LocalSong song) {
     if (_isSelectionMode) {
       _toggleSelection(song.id.toString());
@@ -224,7 +225,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     }
   }
 
-  /// Long press: entra al modo selección
+
   void _handleItemLongPress(LocalSong song) {
     if (!_isSelectionMode) {
       setState(() => _isSelectionMode = true);
@@ -234,7 +235,6 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
   }
 
   @override
-  /// Construye la vista principal o el detalle de playlist
   Widget build(BuildContext context) {
     super.build(context);
     final mode = context.watch<ThemeService>().mode;
@@ -258,7 +258,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     );
   }
 
-  /// Construye la grilla de playlists
+
   Widget _buildPlaylistsGrid(AppThemeMode mode) {
     return ValueListenableBuilder<List<String>>(
       valueListenable: _playlistManager.playlistsNotifier,
@@ -273,7 +273,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
                   size: 80,
                   color: AppColors.textSecondary(mode).withOpacity(0.5),
                 ),
-                const SizedBox(height: 15),
+                SizedBox(height: 15.h),
                 Text(
                   'No hay playlists creadas',
                   style: TextStyle(
@@ -286,18 +286,19 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
           );
         }
 
+        final songMap = {for (var s in _allSongs) s.path: s};
+
         return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          padding: EdgeInsets.all(16.w),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             childAspectRatio: 0.8,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: 16.w,
+            mainAxisSpacing: 16.h,
           ),
           itemCount: playlists.length,
           itemBuilder: (context, index) {
             final name = playlists[index];
-            final songMap = {for (var s in _allSongs) s.path: s};
 
             return ValueListenableBuilder<List<String>>(
               valueListenable: _playlistManager.getSongsNotifier(name),
@@ -307,18 +308,20 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
                     .whereType<LocalSong>()
                     .toList();
 
-                return FutureBuilder<Uint8List?>(
-                  future: _getPlaylistArtwork(name, songsFound),
-                  builder: (context, snapshot) {
-                    return PlaylistCard(
-                      name: name,
-                      songCount: paths.length,
-                      artwork: snapshot.data,
-                      firstSong: songsFound.isNotEmpty ? songsFound.first : null,
-                      onTap: () => _openPlaylist(name),
-                      onLongPress: () => _showPlaylistOptions(name),
-                    );
-                  },
+                final artwork = _playlistCoverCache[name];
+                if (artwork == null && !_pendingCoverFutures.containsKey(name)) {
+                  _getPlaylistArtworkCached(name, songsFound);
+                }
+
+                return PlaylistCard(
+                  name: name,
+                  songCount: paths.length,
+                  artwork: artwork,
+                  firstSong: songsFound.isNotEmpty
+                      ? songsFound.first
+                      : null,
+                  onTap: () => _openPlaylist(name),
+                  onLongPress: () => _showPlaylistOptions(name),
                 );
               },
             );
@@ -328,7 +331,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     );
   }
 
-  /// Muestra diálogo de edición o elimina una playlist
+
   void _showEditDialog(String playlistName) {
     GlobalModalService.show<String>(
       title: 'Editar Playlist',
@@ -342,12 +345,16 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
           [], // Pasamos lista vacía porque los botones están dentro del EditPlaylistDialog
     ).then((newName) {
       if (newName != null && mounted) {
-        setState(() => _currentPlaylistName = newName);
+        setState(() {
+          _playlistCoverCache.remove(playlistName);
+          _playlistCoverCache.remove(newName);
+          _currentPlaylistName = newName;
+        });
       }
     });
   }
 
-  /// Construye el detalle de una playlist con header y lista
+
   Widget _buildPlaylistDetail(AppThemeMode mode) {
     final playlistName = _currentPlaylistName;
     if (playlistName == null) return const SizedBox.shrink();
@@ -362,158 +369,134 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
             .toList();
         _currentPlaylistSongs = songs;
 
-        return FutureBuilder<Uint8List?>(
-          future: _getPlaylistArtwork(playlistName, songs),
-          builder: (context, snapshot) {
-            final customArtwork = snapshot.data;
-            LocalSong? firstSong;
-            if (songs.isNotEmpty) {
-              firstSong = songs.first;
-            }
+        final artwork = _playlistCoverCache[playlistName];
+        if (artwork == null && !_pendingCoverFutures.containsKey(playlistName)) {
+          _getPlaylistArtworkCached(playlistName, songs);
+        }
 
-            final totalDuration = songs.fold<Duration>(Duration.zero, (
-              prev,
-              song,
-            ) {
-              final int? songDuration = song.duration;
-              return prev + Duration(milliseconds: songDuration ?? 0);
-            });
+        LocalSong? firstSong;
+        if (songs.isNotEmpty) {
+          firstSong = songs.first;
+        }
 
-            return ValueListenableBuilder<bool>(
-              valueListenable: _playerManager.isPlayingNotifier,
-              builder: (context, isPlayingGlobal, _) {
-                return ValueListenableBuilder<LocalSong?>(
-                  valueListenable: _playerManager.currentSongNotifier,
-                  builder: (context, currentSong, _) {
-                    final bool isSongInPlaylist =
-                        currentSong != null &&
-                        songs.any((s) => s.id == currentSong.id);
-                    final bool showPause = isPlayingGlobal && isSongInPlaylist;
+        final totalDuration = songs.fold<Duration>(Duration.zero, (prev, song) {
+          final int? songDuration = song.duration;
+          return prev + Duration(milliseconds: songDuration ?? 0);
+        });
 
-                    final header = PlaylistDetailHeader(
-                      playlistName: playlistName,
-                      songs: songs,
-                      totalDuration: totalDuration,
-                      isPlaying: showPause,
-                      onPlay: () {
-                        if (songs.isNotEmpty) {
-                          if (isSongInPlaylist) {
-                            _playerManager.togglePlayPause();
-                          } else {
-                            _playerManager.playSong(songs.first, songs);
-                          }
-                        }
-                      },
-                      onShufflePlay: () {
-                        if (songs.isNotEmpty) {
-                          _playerManager.shufflePlay(songs);
-                        }
-                      },
-                      onEdit: () => _showEditDialog(playlistName),
-                    );
+        return ValueListenableBuilder<bool>(
+          valueListenable: _playerManager.isPlayingNotifier,
+          builder: (context, isPlayingGlobal, _) {
+            return ValueListenableBuilder<LocalSong?>(
+              valueListenable: _playerManager.currentSongNotifier,
+              builder: (context, currentSong, _) {
+                final bool isSongInPlaylist = currentSong != null && songs.any((s) => s.id == currentSong.id);
+                final bool showPause = isPlayingGlobal && isSongInPlaylist;
 
-                    Widget songsBody;
-                    if (_isLoadingPlaylist) {
-                      songsBody = SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: MediaQuery.of(context).size.height,
-                          child: MobilePlaylistShimmer(isGridView: _isGridView),
-                        ),
-                      );
-                    } else if (songs.isEmpty) {
-                      songsBody = SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: Text(
-                            'Playlist vacía',
-                            style: TextStyle(
-                              color: AppColors.textSecondary(mode),
-                            ),
-                          ),
-                        ),
-                      );
-                    } else if (_isGridView) {
-                      songsBody = SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 20,
-                        ),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.7,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                          ),
-                          delegate: SliverChildBuilderDelegate((
-                            context,
-                            index,
-                          ) {
-                            return AnimationConfiguration.staggeredGrid(
-                              position: index,
-                              columnCount: 3,
-                              duration: const Duration(milliseconds: 375),
-                              child: ScaleAnimation(
-                                child: FadeInAnimation(
-                                  child: RepaintBoundary(
-                                    child: _buildSongItem(
-                                      songs[index],
-                                      true,
-                                      mode,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }, childCount: songs.length),
-                        ),
-                      );
-                    } else {
-                      songsBody = SliverList(
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          return AnimationConfiguration.staggeredList(
-                            position: index,
-                            duration: const Duration(milliseconds: 375),
-                            child: SlideAnimation(
-                              verticalOffset: 50.0,
-                              child: FadeInAnimation(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 5,
-                                  ),
-                                  child: SizedBox(
-                                    height: 70,
-                                    child: RepaintBoundary(
-                                      child: _buildSongItem(
-                                        songs[index],
-                                        false,
-                                        mode,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }, childCount: songs.length),
-                      );
+                final header = PlaylistDetailHeader(
+                  playlistName: playlistName,
+                  songs: songs,
+                  totalDuration: totalDuration,
+                  isPlaying: showPause,
+                  onPlay: () {
+                    if (songs.isNotEmpty) {
+                      if (isSongInPlaylist) {
+                        _playerManager.togglePlayPause();
+                      } else {
+                        _playerManager.playSong(songs.first, songs);
+                      }
                     }
-
-                    return CustomScrollView(
-                      slivers: [
-                        SharedCoverHeader(
-                          mode: mode,
-                          artwork: customArtwork ?? firstSong?.artwork,
-                          bottom: header,
-                          expandedHeight: 350.0,
-                        ),
-                        songsBody,
-                        const SliverToBoxAdapter(child: SizedBox(height: 120)),
-                      ],
-                    );
                   },
+                  onShufflePlay: () {
+                    if (songs.isNotEmpty) {
+                      _playerManager.shufflePlay(songs);
+                    }
+                  },
+                  onEdit: () => _showEditDialog(playlistName),
+                );
+
+                Widget songsBody;
+                if (_isLoadingPlaylist) {
+                  songsBody = SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height,
+                      child: MobilePlaylistShimmer(isGridView: _isGridView),
+                    ),
+                  );
+                } else if (songs.isEmpty) {
+                  songsBody = SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Text(
+                        'Playlist vacía',
+                        style: TextStyle(
+                          color: AppColors.textSecondary(mode),
+                        ),
+                      ),
+                    ),
+                  );
+                } else if (_isGridView) {
+                  songsBody = SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
+                    sliver: SliverGrid(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 0.7,
+                        crossAxisSpacing: 16.w,
+                        mainAxisSpacing: 16.h,
+                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        return AnimationConfiguration.staggeredGrid(
+                          position: index,
+                          columnCount: 3,
+                          duration: const Duration(milliseconds: 375),
+                          child: ScaleAnimation(
+                            child: FadeInAnimation(
+                              child: RepaintBoundary(
+                                child: _buildSongItem(songs[index], true, mode),
+                              ),
+                            ),
+                          ),
+                        );
+                      }, childCount: songs.length),
+                    ),
+                  );
+                } else {
+                  songsBody = SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      return AnimationConfiguration.staggeredList(
+                        position: index,
+                        duration: const Duration(milliseconds: 375),
+                        child: SlideAnimation(
+                          verticalOffset: 50.0,
+                          child: FadeInAnimation(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 5.h),
+                              child: SizedBox(
+                                height: 75.h,
+                                child: RepaintBoundary(
+                                  child: _buildSongItem(songs[index], false, mode),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }, childCount: songs.length),
+                  );
+                }
+
+                return CustomScrollView(
+                  slivers: [
+                    SharedCoverHeader(
+                      mode: mode,
+                      artwork: artwork ?? firstSong?.artwork,
+                      bottom: header,
+                      expandedHeight: 300.0.h,
+                    ),
+                    songsBody,
+                    SliverToBoxAdapter(child: SizedBox(height: 120.h)),
+                  ],
                 );
               },
             );
@@ -523,7 +506,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     );
   }
 
-  /// Construye un item de canción con selección y estados
+
   Widget _buildSongItem(LocalSong song, bool isGrid, AppThemeMode mode) {
     final isSelected = _selectedIds.contains(song.id.toString());
     final isAdo = AdoHandler.isAdo(song);
@@ -587,7 +570,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     );
   }
 
-  /// Muestra opciones de playlist (editar/eliminar) en modal
+
   void _showPlaylistOptions(String name) async {
     final action = await GlobalModalService.showList<String>(
       title: name,
@@ -616,6 +599,9 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
         ),
         actions: [],
       );
+      if (mounted) {
+        setState(() => _playlistCoverCache.remove(name));
+      }
     } else if (action == 'Eliminar Playlist') {
       final confirmed = await GlobalModalService.showConfirmation(
         title: '¿Eliminar playlist?',
@@ -640,7 +626,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
     }
   }
 
-  /// Obtiene la carátula de una playlist de preferencias o archivos
+
   Future<Uint8List?> _getPlaylistArtwork(
     String playlistName,
     List<LocalSong> songs,
@@ -671,27 +657,45 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
 
     if (coverId.startsWith('FILE:')) {
       final filePath = coverId.substring(5);
-      try {
-        return await File(filePath).readAsBytes();
-      } catch (_) {}
+      final file = File(filePath);
+      if (file.existsSync()) {
+        try {
+          return await file.readAsBytes();
+        } catch (_) {}
+      }
     }
 
     return null;
   }
 
-  /// Remueve la carátula personalizada
+
+  Future<Uint8List?> _getPlaylistArtworkCached(String playlistName, List<LocalSong> songs) {
+    if (_playlistCoverCache.containsKey(playlistName)) {
+      return Future.value(_playlistCoverCache[playlistName]);
+    }
+    
+    // Si ya hay una petición en curso para esta playlist, retornamos la misma
+    if (_pendingCoverFutures.containsKey(playlistName)) {
+      return _pendingCoverFutures[playlistName]!;
+    }
+
+    final future = _getPlaylistArtwork(playlistName, songs).then((data) {
+      if (mounted) {
+        setState(() {
+          _playlistCoverCache[playlistName] = data;
+        });
+      }
+      _pendingCoverFutures.remove(playlistName);
+      return data;
+    });
+
+    _pendingCoverFutures[playlistName] = future;
+    return future;
+  }
+
+
   Future<void> _removePlaylistCover(String playlistName) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('playlist_cover_$playlistName');
-  }
-
-  /// Renombra la clave de carátula al renombrar la playlist
-  Future<void> _renamePlaylistCover(String oldName, String newName) async {
-    final prefs = await SharedPreferences.getInstance();
-    final oldCover = prefs.getString('playlist_cover_$oldName');
-    if (oldCover != null) {
-      await prefs.setString('playlist_cover_$newName', oldCover);
-      await prefs.remove('playlist_cover_$oldName');
-    }
   }
 }

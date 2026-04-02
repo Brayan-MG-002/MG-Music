@@ -4,16 +4,13 @@
 import 'package:mg_music/services/models/song_model.dart';
 import 'package:mg_music/services/audio/music_audio_handler.dart';
 
-/// Adaptador simplificado para manejar notificaciones
 class AudioServiceAdapter {
   static MusicAudioHandler? _handler;
 
-  /// Configura el handler
   static void setHandler(MusicAudioHandler handler) {
     _handler = handler;
   }
 
-  /// Actualiza la notificación
   static Future<void> updateNotification(
     LocalSong song, {
     required bool isPlaying,
@@ -33,7 +30,6 @@ class AudioServiceAdapter {
     } catch (e) {}
   }
 
-  /// Actualiza solo el estado
   static Future<void> updatePlaybackState({
     required bool isPlaying,
     required bool showPrevious,

@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Barra superior de Favoritos en TV
+// Barra superior personalizada para la sección de favoritos en TV, con acciones rápidas de reproducción y edición.
 
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
@@ -20,7 +20,6 @@ class TvFavoritesTopBar extends StatelessWidget {
   });
 
   @override
-  /// Construye la barra con acciones de aleatorio y eliminar
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return Container(
@@ -69,7 +68,6 @@ class TvFavoritesTopBar extends StatelessWidget {
     );
   }
 
-  /// Botón tipo "chip" con icono y etiqueta
   Widget _chipButton({
     required IconData icon,
     required String label,

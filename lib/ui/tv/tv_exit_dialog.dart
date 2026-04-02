@@ -1,4 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
+// Diálogo de confirmación de salida para la interfaz de TV.
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/services/audio/audio_player_manager.dart';

@@ -1,5 +1,5 @@
-// Barra de tiempo vertical del reproductor TV
-// Controla y muestra progreso/duración con navegación por control remoto
+// Copyright © 2026 Brayan Medrano - MG Music
+// Barra de progreso y tiempo para el reproductor TV, con soporte para navegación vertical y control remoto.
 import 'package:flutter/material.dart';
 import 'package:mg_music/services/audio/audio_player_manager.dart';
 import 'package:mg_music/services/logic/tv_full_player_logic.dart';
@@ -19,7 +19,6 @@ class TvFullPlayerTimeBar extends StatelessWidget {
   });
 
   @override
-  /// Construye la barra de tiempo con slider vertical enfocable
   Widget build(BuildContext context) {
     return Expanded(
       flex: 1,
@@ -67,8 +66,8 @@ class TvFullPlayerTimeBar extends StatelessWidget {
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
                                   colors: mode == AppThemeMode.dark
-                                      ? [Colors.blue.shade900, Colors.black]
-                                      : [Colors.blue.shade500, Colors.white],
+                                      ? [AppColors.primaryBlue, Colors.black]
+                                      : [AppColors.primaryBlueMid, Colors.white],
                                 ),
                               ),
                             ),
@@ -117,7 +116,6 @@ class _GradientTrackShape extends SliderTrackShape {
   const _GradientTrackShape({required this.gradient});
 
   @override
-  /// Define el rectángulo preferido del track
   Rect getPreferredRect({
     required RenderBox parentBox,
     Offset offset = Offset.zero,
@@ -133,7 +131,6 @@ class _GradientTrackShape extends SliderTrackShape {
   }
 
   @override
-  /// Pinta las secciones activa/inactiva del track con degradado
   void paint(
     PaintingContext context,
     Offset offset, {

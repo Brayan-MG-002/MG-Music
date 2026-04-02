@@ -5,7 +5,7 @@ import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class LinkDialog {
-  /// Muestra un diálogo de confirmación y abre un enlace externo
+
   static Future<void> show({
     required BuildContext context,
     required String title,
@@ -30,7 +30,7 @@ class LinkDialog {
           label: 'Continuar',
           onPressed: () {
             Navigator.of(navContext).pop();
-            _launchExternalUrl(url);
+            launchExternalUrl(url);
           },
           color: AppColors.primaryBlueMid,
         ),
@@ -38,8 +38,8 @@ class LinkDialog {
     );
   }
 
-  /// Intenta abrir una URL usando diferentes modos disponibles
-  static Future<void> _launchExternalUrl(String urlString) async {
+
+  static Future<void> launchExternalUrl(String urlString) async {
     final Uri uri = Uri.parse(urlString);
     try {
       await launchUrl(uri, mode: LaunchMode.inAppBrowserView);

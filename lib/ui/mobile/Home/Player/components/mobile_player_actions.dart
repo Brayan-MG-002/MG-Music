@@ -13,6 +13,7 @@ import 'package:mg_music/services/ui/custom_toast_service.dart';
 import 'mobile_heart_icon.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
 import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/ui/mobile/Home/Settings/components/sleep_timer_modal.dart';
 
 class MobilePlayerActions extends StatelessWidget {
   final AudioPlayerManager manager;
@@ -40,13 +41,22 @@ class MobilePlayerActions extends StatelessWidget {
               icon: Icon(
                 Ionicons.shuffle,
                 color: isShuffle
-                    ? AppColors.primaryBlueMid
+                    ? AppColors.primaryBlueFixed
                     : AppColors.textSecondary(mode),
                 size: 26.r,
               ),
               onPressed: manager.toggleShuffleMode,
             );
           },
+        ),
+        // Temporizador de Sueño
+        IconButton(
+          icon: Icon(
+            Ionicons.timer_outline,
+            color: AppColors.textSecondary(mode),
+            size: 26.r,
+          ),
+          onPressed: () => SleepTimerModal.show(context),
         ),
         // Favoritos (Animado)
         ValueListenableBuilder<List<String>>(
@@ -87,7 +97,7 @@ class MobilePlayerActions extends StatelessWidget {
           builder: (context, loopMode, _) {
             Color color = AppColors.textSecondary(mode);
             if (loopMode == LoopMode.one || loopMode == LoopMode.all) {
-              color = AppColors.primaryBlueMid;
+              color = AppColors.primaryBlueFixed;
             }
             IconData icon = Ionicons.repeat;
             if (loopMode == LoopMode.one) {

@@ -1,40 +1,37 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Servicio de Modal Global con diseño estilo Ado
+// Servicio centralizado para la gestión de diálogos y modales en toda la aplicación, con una estética premium inspirada en Ado y soporte para navegación remota/TV.
 
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:mg_music/services/ui/theme_service.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
+import 'package:mg_music/services/audio/audio_player_manager.dart';
+import 'package:mg_music/services/ui/custom_toast_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/services/ui/theme_service.dart';
 
-/// Servicio para mostrar modales globales desde cualquier parte de la app
 class GlobalModalService {
-  // Key global para acceder al contexto de navegación sin necesidad de pasarlo
-  static final GlobalKey<NavigatorState> navigatorKey =
-      GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  /// Muestra el modal genérico
   static Future<T?> show<T>({
     required String title,
     String? message,
     IconData? icon,
-    Widget? content, // Para inputs, listas personalizadas, etc.
-    List<Widget>? actions, // Botones
+    Widget? content,
+    List<Widget>? actions,
     bool dismissible = true,
-    Duration? unlockDelay, // Tiempo de espera para desbloquear botones
+    Duration? unlockDelay,
     Color? primaryColor,
-    FocusNode? initialFocus, // Nodo de foco inicial (TV / teclado)
+    FocusNode? initialFocus,
   }) {
     final context = navigatorKey.currentContext;
     if (context == null) return Future.value(null);
 
-    // Si hay un temporizador de desbloqueo, forzamos a que NO se pueda cerrar tocando afuera
     final isDismissible = unlockDelay != null ? false : dismissible;
 
-    // Usamos showGeneralDialog para personalizar la animación de entrada y SALIDA
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: isDismissible,
@@ -55,7 +52,6 @@ class GlobalModalService {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        // Curva personalizada: Rebote al entrar (easeOutBack), Suave al salir (easeInBack)
         final curvedAnimation = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutBack,
@@ -64,7 +60,6 @@ class GlobalModalService {
 
         return Stack(
           children: [
-            // 1. Fondo desenfocado (Fade) - Se anima separado para no escalar el blur
             Positioned.fill(
               child: FadeTransition(
                 opacity: animation,
@@ -74,7 +69,6 @@ class GlobalModalService {
                 ),
               ),
             ),
-            // 2. El Modal (Scale + Fade)
             FadeTransition(
               opacity: animation,
               child: ScaleTransition(scale: curvedAnimation, child: child),
@@ -85,7 +79,6 @@ class GlobalModalService {
     );
   }
 
-  /// Helper para mostrar una lista seleccionable
   static Future<T?> showList<T>({
     required String title,
     required List<T> items,
@@ -101,7 +94,7 @@ class GlobalModalService {
       title: title,
       icon: icon,
       content: SizedBox(
-        height: 200, // Altura controlada para la lista
+        height: 200.h,
         child: ListView.builder(
           itemCount: items.length,
           itemBuilder: (context, index) {
@@ -110,10 +103,10 @@ class GlobalModalService {
               position: index,
               duration: const Duration(milliseconds: 375),
               child: SlideAnimation(
-                verticalOffset: 50.0,
+                verticalOffset: 50.0.h,
                 child: FadeInAnimation(
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
+                    margin: EdgeInsets.only(bottom: 10.h),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -123,20 +116,22 @@ class GlobalModalService {
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(10.r),
                       border: Border.all(
                         color: AppColors.themeBorder(mode).withOpacity(0.5),
                       ),
                     ),
                     child: ListTile(
+                      contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 0),
+                      visualDensity: VisualDensity.compact,
                       title: Text(
                         labelBuilder(item),
-                        style: TextStyle(color: AppColors.textPrimary(mode)),
+                        style: TextStyle(color: AppColors.textPrimary(mode), fontSize: 13.sp),
                       ),
                       onTap: () => Navigator.of(context).pop(item),
                       trailing: Icon(
                         Icons.arrow_forward_ios,
-                        size: 14,
+                        size: 11.r,
                         color: AppColors.textSecondary(mode),
                       ),
                     ),
@@ -150,7 +145,6 @@ class GlobalModalService {
     );
   }
 
-  /// Muestra un modal de carga (spinner)
   static Future<void> showLoading({
     String message = "Cargando...",
     Color? color,
@@ -168,29 +162,31 @@ class GlobalModalService {
         children: [
           const SizedBox(height: 20),
           CircularProgressIndicator(
+            strokeWidth: 3.w,
             valueColor: AlwaysStoppedAnimation<Color>(
               color ?? AppColors.primaryBlueMid,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.h),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary(mode)),
+            style: TextStyle(
+              color: AppColors.textSecondary(mode),
+              fontSize: 12.sp,
+            ),
           ),
         ],
       ),
-      actions: [], // Sin botones
+      actions: [],
     );
   }
 
-  /// Selector de Assets (Imágenes) con scroll horizontal y estado de selección
   static Future<String?> showAssetPicker({
     required String title,
     required List<String> assets,
     IconData? icon,
   }) {
-    // Usamos un ValueNotifier para gestionar la selección localmente
     final ValueNotifier<String?> selectedAssetNotifier = ValueNotifier(null);
 
     return show<String>(
@@ -207,7 +203,6 @@ class GlobalModalService {
           onPressed: () => Navigator.of(navigatorKey.currentContext!).pop(),
           color: Colors.grey.shade600,
         ),
-        // El botón de confirmar escucha los cambios en la selección
         ValueListenableBuilder<String?>(
           valueListenable: selectedAssetNotifier,
           builder: (context, selected, _) {
@@ -225,8 +220,6 @@ class GlobalModalService {
     );
   }
 
-  /// Muestra un diálogo de confirmación simple que devuelve un booleano.
-  /// Retorna `true` si se confirma, `false` si se cancela o cierra.
   static Future<bool> showConfirmation({
     required String title,
     String? message,
@@ -254,15 +247,9 @@ class GlobalModalService {
       ],
     );
 
-    // Si el usuario cierra el diálogo tocando fuera (dismiss), el resultado es null.
-    // Lo tratamos como una cancelación (false).
     return result ?? false;
   }
 
-  /// Muestra una lista de selección vertical optimizada
-  /// - [selectedItem]: Elemento actualmente seleccionado para resaltarlo
-  /// - Sin botones de acción (se cierra al seleccionar)
-  /// - Altura adaptable (shrinkWrap)
   static Future<T?> showSelectionList<T>({
     required String title,
     required List<T> items,
@@ -278,11 +265,10 @@ class GlobalModalService {
     return show<T>(
       title: title,
       icon: icon,
-      actions: [], // Pasamos lista vacía para indicar "sin botones"
+      actions: [],
       content: ListView.builder(
         shrinkWrap: true,
-        physics:
-            const NeverScrollableScrollPhysics(), // El scroll lo maneja el modal
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: items.length,
         padding: EdgeInsets.zero,
         itemBuilder: (context, index) {
@@ -296,23 +282,23 @@ class GlobalModalService {
               child: InkWell(
                 onTap: () =>
                     Navigator.of(navigatorKey.currentContext!).pop(item),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(10.r),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 15,
-                    vertical: 12,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 10.w,
+                    vertical: 6.h,
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? AppColors.primaryBlueMid.withOpacity(0.4)
                         : AppColors.background(mode).withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8.r),
                     border: Border.all(
                       color: isSelected
                           ? AppColors.themeBorder(mode)
                           : Colors.transparent,
-                      width: 1,
+                      width: 1.w,
                     ),
                   ),
                   child: Row(
@@ -327,7 +313,7 @@ class GlobalModalService {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            fontSize: 16,
+                            fontSize: 13.sp,
                           ),
                         ),
                       ),
@@ -335,7 +321,7 @@ class GlobalModalService {
                         Icon(
                           Icons.check_circle,
                           color: AppColors.primaryBlueMid,
-                          size: 18,
+                          size: 14.r,
                         ),
                     ],
                   ),
@@ -348,14 +334,6 @@ class GlobalModalService {
     );
   }
 
-  /// Muestra un modal con tres rodillos deslizantes (horas, minutos, segundos)
-  /// al estilo alarma. Devuelve la [Duration] elegida o null si cancela.
-  ///
-  /// Uso:
-  /// ```dart
-  /// final d = await GlobalModalService.showDurationPicker(title: 'Tiempo');
-  /// if (d != null) doSomething(d);
-  /// ```
   static Future<Duration?> showDurationPicker({
     required String title,
     Duration initialValue = const Duration(minutes: 30),
@@ -401,13 +379,93 @@ class GlobalModalService {
     );
   }
 
-  /// Muestra un modal de error de reproducción con opción de reportar vía WhatsApp.
-  ///
-  /// - [error]: El objeto de error o excepción capturado.
-  /// - [errorCode]: Código corto identificador del error (ej: "AUDIO_001").
+  static void showSleepTimerDialog(BuildContext context) {
+    final mode = Provider.of<ThemeService>(context, listen: false).mode;
+    final options = [
+      ('Al terminar canción', -1, Ionicons.musical_note_outline),
+      ('5 Minutos', 5, Ionicons.time_outline),
+      ('10 Minutos', 10, Ionicons.time_outline),
+      ('15 Minutos', 15, Ionicons.time_outline),
+      ('30 Minutos', 30, Ionicons.time_outline),
+      ('45 Minutos', 45, Ionicons.time_outline),
+      ('60 Minutos', 60, Ionicons.time_outline),
+      ('Desactivar', 0, Ionicons.close_circle_outline),
+    ];
+
+    show(
+      title: 'Temporizador de Apagado',
+      icon: Ionicons.timer_outline,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: options.map((opt) {
+          final isDelete = opt.$2 == 0;
+          final isEndSong = opt.$2 == -1;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: 8.h),
+            child: TvFocusableItem(
+              onTap: () {
+                if (isEndSong) {
+                  AudioPlayerManager().setSleepAtEndOfSong();
+                } else {
+                  AudioPlayerManager().setSleepTimer(opt.$2);
+                }
+                Navigator.pop(context);
+
+                String msg = isDelete
+                    ? 'Temporizador desactivado'
+                    : (isEndSong
+                        ? 'Se pausará al terminar la canción'
+                        : 'Apagado en ${opt.$1}');
+
+                CustomToastService.show(
+                  context,
+                  message: msg,
+                  type: isDelete ? ToastType.warning : ToastType.ado,
+                  icon: opt.$3,
+                );
+              },
+              borderRadius: 12.r,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                child: Row(
+                  children: [
+                    Icon(
+                      opt.$3,
+                      color:
+                          isDelete ? Colors.redAccent : AppColors.primaryBlueMid,
+                      size: 22.r,
+                    ),
+                    SizedBox(width: 16.w),
+                    Text(
+                      opt.$1,
+                      style: TextStyle(
+                        color:
+                            isDelete
+                                ? Colors.redAccent
+                                : AppColors.textPrimary(mode),
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+      actions: [
+        ModalActionButton(
+          label: 'Cerrar',
+          onPressed: () => Navigator.pop(context),
+          color: Colors.grey,
+        ),
+      ],
+    );
+  }
 }
 
-/// Widget interno que renderiza el diseño del modal
 class _UniversalModal extends StatefulWidget {
   final String title;
   final String? message;
@@ -441,7 +499,6 @@ class _UniversalModalState extends State<_UniversalModal> {
   bool _isLocked = false;
 
   @override
-  /// Inicializa temporizador de bloqueo y foco inicial
   void initState() {
     super.initState();
     if (widget.unlockDelay != null) {
@@ -469,14 +526,12 @@ class _UniversalModalState extends State<_UniversalModal> {
   }
 
   @override
-  /// Libera temporizador
   void dispose() {
     _timer?.cancel();
     super.dispose();
   }
 
   @override
-  /// Construye el modal universal con animaciones y acciones
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     final size = MediaQuery.of(context).size;
@@ -495,26 +550,26 @@ class _UniversalModalState extends State<_UniversalModal> {
         child: Center(
           child: GestureDetector(
             onTap: () {},
-            child: Container(
-              margin: EdgeInsets.symmetric(
-                vertical: verticalMargin,
-                horizontal: 20,
-              ),
-              constraints: BoxConstraints(
-                maxHeight: size.height * 0.6,
-                maxWidth: 500,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.background(mode),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: primaryColor, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withOpacity(0.4),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
-                ],
+              child: Container(
+                margin: EdgeInsets.symmetric(
+                  vertical: verticalMargin,
+                  horizontal: 20.w,
+                ),
+                constraints: BoxConstraints(
+                  maxHeight: size.height * 0.7,
+                  maxWidth: 500.w,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.background(mode),
+                  borderRadius: BorderRadius.circular(20.r),
+                  border: Border.all(color: primaryColor, width: 1.2.w),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.4),
+                      blurRadius: 15.r,
+                      spreadRadius: 1.r,
+                    ),
+                  ],
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -526,10 +581,10 @@ class _UniversalModalState extends State<_UniversalModal> {
                 ),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(20.r),
                 child: AnimationLimiter(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
+                    padding: EdgeInsets.all(16.r),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -537,14 +592,13 @@ class _UniversalModalState extends State<_UniversalModal> {
                         duration: const Duration(milliseconds: 500),
                         delay: const Duration(milliseconds: 100),
                         childAnimationBuilder: (widget) => SlideAnimation(
-                          verticalOffset: 50.0,
+                          verticalOffset: 50.0.h,
                           child: FadeInAnimation(child: widget),
                         ),
                         children: [
-                          // 1. Icono Principal
                           if (widget.icon != null) ...[
-                            Icon(widget.icon, size: 48, color: primaryColor),
-                            const SizedBox(height: 16),
+                            Icon(widget.icon, size: 28.r, color: primaryColor),
+                            SizedBox(height: 10.h),
                           ],
 
                           Text(
@@ -552,12 +606,12 @@ class _UniversalModalState extends State<_UniversalModal> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.textPrimary(mode),
-                              fontSize: 22,
+                              fontSize: MediaQuery.of(context).size.height < 700 ? 16.sp : 18.sp,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 1.0,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: 10.h),
 
                           if (widget.message != null) ...[
                             Text(
@@ -565,15 +619,22 @@ class _UniversalModalState extends State<_UniversalModal> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: AppColors.textSecondary(mode),
-                                fontSize: 16,
+                                fontSize: 14.sp,
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            SizedBox(height: 12.h),
                           ],
 
                           if (widget.content != null) ...[
-                            widget.content!,
-                            const SizedBox(height: 20),
+                            DefaultTextStyle(
+                              style: TextStyle(
+                                fontSize: 14.sp,
+                                color: AppColors.textSecondary(mode),
+                                fontFamily: 'CircularStd',
+                              ),
+                              child: widget.content!,
+                            ),
+                            SizedBox(height: 12.h),
                           ],
 
                           if (widget.actions != null) ...[
@@ -633,7 +694,6 @@ class _UniversalModalState extends State<_UniversalModal> {
   }
 }
 
-/// Botón estandarizado para los modales con estilo degradado
 class ModalActionButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -660,33 +720,34 @@ class ModalActionButton extends StatelessWidget {
     return TvFocusableItem(
       focusNode: focusNode,
       onTap: isDisabled ? null : onPressed,
-      borderRadius: 30,
+      borderRadius: 30.r,
       selectedColor: Colors.transparent,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        margin: EdgeInsets.symmetric(horizontal: 2.w),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [effectiveColor, AppColors.background(mode)],
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: effectiveColor),
+          borderRadius: BorderRadius.circular(30.r),
+          border: Border.all(color: effectiveColor, width: 1.w),
           boxShadow: [
             BoxShadow(
               color: effectiveColor.withOpacity(0.5),
-              blurRadius: 10,
-              spreadRadius: 1,
+              blurRadius: 10.r,
+              spreadRadius: 1.r,
             ),
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
           child: Text(
             label,
             style: TextStyle(
               color: effectiveTextColor,
               fontWeight: FontWeight.bold,
+              fontSize: 13.sp,
             ),
           ),
         ),
@@ -695,7 +756,6 @@ class ModalActionButton extends StatelessWidget {
   }
 }
 
-/// Widget reutilizable para el selector de assets (Público para usar en modales combinados)
 class AssetPickerSelector extends StatefulWidget {
   final List<String> assets;
   final ValueNotifier<String?> selectedNotifier;
@@ -716,7 +776,7 @@ class _AssetPickerSelectorState extends State<AssetPickerSelector> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 140, // Altura suficiente para imagen + borde
+      height: 120.h,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: widget.assets.length,
@@ -731,22 +791,22 @@ class _AssetPickerSelectorState extends State<AssetPickerSelector> {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 15, top: 5, bottom: 5),
-              padding: const EdgeInsets.all(8),
+              margin: EdgeInsets.only(right: 12.w, top: 4.h, bottom: 4.h),
+              padding: EdgeInsets.all(6.r),
               decoration: BoxDecoration(
                 color: isSelected
                     ? Colors.blue.shade900.withOpacity(0.3)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(15.r),
                 border: Border.all(
                   color: isSelected ? Colors.cyanAccent : Colors.transparent,
-                  width: 2,
+                  width: 2.w,
                 ),
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
                           color: Colors.cyanAccent.withOpacity(0.3),
-                          blurRadius: 10,
+                          blurRadius: 10.r,
                         ),
                       ]
                     : [],
@@ -760,7 +820,6 @@ class _AssetPickerSelectorState extends State<AssetPickerSelector> {
   }
 }
 
-/// Widget interno para showDurationPicker — tres rodillos tipo alarma
 class _DurationPickerContent extends StatefulWidget {
   final FixedExtentScrollController hCtrl;
   final FixedExtentScrollController mCtrl;

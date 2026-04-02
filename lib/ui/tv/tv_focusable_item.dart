@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Widget enfocable para TV con soporte de control remoto
+// Componente base para elementos interactivos en TV, manejando el foco, eventos de control remoto y efectos visuales.
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -17,6 +17,7 @@ class TvFocusableItem extends StatefulWidget {
   final FocusOnKeyEventCallback? onKeyEvent;
   final Color? selectedColor;
   final double focusBorderWidth;
+  final bool autofocus;
 
   const TvFocusableItem({
     super.key,
@@ -29,6 +30,7 @@ class TvFocusableItem extends StatefulWidget {
     this.isSelected = false,
     this.selectedColor,
     this.focusBorderWidth = 4.0,
+    this.autofocus = false,
   });
 
   @override
@@ -40,19 +42,18 @@ class _TvFocusableItemState extends State<TvFocusableItem> {
   Timer? _longPressTimer;
 
   @override
-  /// Cancela temporizadores y libera recursos
   void dispose() {
     _longPressTimer?.cancel();
     super.dispose();
   }
 
   @override
-  /// Construye el contenedor enfocable y maneja eventos de teclado
   Widget build(BuildContext context) {
     final mode = context.read<ThemeService>().mode;
     final invertedMode =
         mode == AppThemeMode.dark ? AppThemeMode.light : AppThemeMode.dark;
     return Focus(
+      autofocus: widget.autofocus,
       focusNode: widget.focusNode,
       onFocusChange: (hasFocus) {
         setState(() {
@@ -153,7 +154,6 @@ class _GradientBorderPainter extends CustomPainter {
   });
 
   @override
-  /// Dibuja el borde degradado sin afectar el layout
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     final rrect = RRect.fromRectAndRadius(
@@ -168,7 +168,6 @@ class _GradientBorderPainter extends CustomPainter {
   }
 
   @override
-  /// Determina si se debe repintar según cambios en propiedades
   bool shouldRepaint(covariant _GradientBorderPainter oldDelegate) {
     return oldDelegate.gradient != gradient ||
         oldDelegate.radius != radius ||

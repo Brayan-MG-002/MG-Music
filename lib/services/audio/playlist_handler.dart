@@ -2,16 +2,15 @@
 // Lógica para el manejo de la playlist, shuffle y navegación
 
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:mg_music/services/models/song_model.dart';
 
 class PlaylistHandler {
-  /// Lista original (orden del Home al momento de iniciar reproducción).
   List<LocalSong> _playlist = [];
   List<LocalSong> _shuffledPlaylist = [];
 
   bool _isShuffleMode = false;
-  int _currentIndex = -1; // Index in _playlist OR _shuffledPlaylist
+  int _currentIndex = -1;
 
   bool get isShuffleMode => _isShuffleMode;
 
@@ -19,7 +18,6 @@ class PlaylistHandler {
 
   int get currentIndex => _currentIndex;
 
-  /// Establece una nueva lista de reproducción
   void setPlaylist(List<LocalSong> newPlaylist) {
     _playlist = List.from(newPlaylist);
     _generateShuffle();
@@ -29,12 +27,10 @@ class PlaylistHandler {
     _shuffledPlaylist = List.from(_playlist)..shuffle();
   }
 
-  /// Activa/desactiva el modo shuffle y reposiciona el índice
   void setShuffleMode(bool shuffle) {
     _isShuffleMode = shuffle;
     if (shuffle) {
       _generateShuffle();
-      // Ensure current song is placed first or matched in shuffle list
       final current = this.current();
       if (current != null) {
         _shuffledPlaylist.removeWhere((s) => s.id == current.id);
@@ -50,7 +46,6 @@ class PlaylistHandler {
     }
   }
 
-  /// Actualiza la lista base si no hay reproducción
   void updateBasePlaylist(List<LocalSong> newList) {
     final currentSong = current();
     _playlist = List.from(newList);
@@ -69,7 +64,6 @@ class PlaylistHandler {
     }
   }
 
-  /// Fija el índice actual según la canción dada
   void setCurrentSong(LocalSong song) {
     if (_isShuffleMode) {
       final index = _shuffledPlaylist.indexWhere((s) => s.id == song.id);
@@ -80,7 +74,6 @@ class PlaylistHandler {
     }
   }
 
-  /// Retorna la canción actual
   LocalSong? current() {
     final list = _isShuffleMode ? _shuffledPlaylist : _playlist;
     if (_currentIndex >= 0 && _currentIndex < list.length) {
@@ -89,7 +82,6 @@ class PlaylistHandler {
     return null;
   }
 
-  /// Avanza al siguiente elemento
   LocalSong? getNext() {
     final list = _isShuffleMode ? _shuffledPlaylist : _playlist;
     if (list.isEmpty) return null;
@@ -97,7 +89,6 @@ class PlaylistHandler {
     return list[_currentIndex];
   }
 
-  /// Retrocede al anterior
   LocalSong? getPrevious() {
     final list = _isShuffleMode ? _shuffledPlaylist : _playlist;
     if (list.isEmpty) return null;
@@ -106,7 +97,6 @@ class PlaylistHandler {
     return list[_currentIndex];
   }
 
-  /// Va al primero
   LocalSong? getFirst() {
     final list = _isShuffleMode ? _shuffledPlaylist : _playlist;
     if (list.isEmpty) return null;
@@ -114,7 +104,6 @@ class PlaylistHandler {
     return list[_currentIndex];
   }
 
-  /// Va al último
   LocalSong? getLast() {
     final list = _isShuffleMode ? _shuffledPlaylist : _playlist;
     if (list.isEmpty) return null;
@@ -122,7 +111,6 @@ class PlaylistHandler {
     return list[_currentIndex];
   }
 
-  /// Crea una fuente de audio para una sola canción
   AudioSource createSingleSource(LocalSong song) {
     return AudioSource.file(
       song.path,
@@ -138,6 +126,5 @@ class PlaylistHandler {
     );
   }
 
-  /// Obsoleto: usa createSingleSource
   AudioSource createAudioSource(LocalSong song) => createSingleSource(song);
 }

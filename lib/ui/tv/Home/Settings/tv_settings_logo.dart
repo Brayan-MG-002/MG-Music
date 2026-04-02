@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Logo interactivo para la configuración TV
+// Logo interactivo para la sección de configuración en TV, con efectos visuales dinámicos basados en la música y gestos táctiles/remotos.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -29,7 +29,6 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
   Color _neonColor = Colors.blue.shade900;
 
   @override
-  /// Inicializa controladores y se suscribe a cambios de canción
   void initState() {
     super.initState();
     _borderController = AnimationController(
@@ -66,7 +65,7 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
     }
   }
 
-  /// Actualiza el color neón a partir de la carátula actual
+
   Future<void> _updateColor(Uint8List? artwork) async {
     if (artwork == null) {
       if (mounted) setState(() => _neonColor = Colors.blue.shade900);
@@ -88,7 +87,6 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
   }
 
   @override
-  /// Libera controladores y timers
   void dispose() {
     _audioManager.currentSongNotifier.removeListener(_checkCurrentSong);
     _borderController.dispose();
@@ -98,7 +96,6 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
     super.dispose();
   }
 
-  /// Inicia el gesto de mantener pulsado para reproducir Ado aleatorio
   void _startHold() {
     if (_holdTimer != null) return;
     final adoSongs = _audioManager.playlist
@@ -113,7 +110,6 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
     });
   }
 
-  /// Resetea el gesto de mantener pulsado
   void _resetHold() {
     _holdTimer?.cancel();
     _holdTimer = null;
@@ -121,7 +117,6 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
     _wobbleController.reset();
   }
 
-  /// Maneja eventos de teclado para mantener/soltar
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     final isSelect =
         event.logicalKey == LogicalKeyboardKey.select ||
@@ -140,7 +135,6 @@ class _TvSettingsLogoState extends State<TvSettingsLogo>
   }
 
   @override
-  /// Construye el logo interactivo con borde animado y pulso
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return Listener(
@@ -228,7 +222,6 @@ class _LogoBorderPainter extends CustomPainter {
   });
 
   @override
-  /// Dibuja el borde circular con efecto glow
   void paint(Canvas canvas, Size size) {
     if (progress <= 0) return;
     final center = Offset(size.width / 2, size.height / 2);
@@ -265,7 +258,6 @@ class _LogoBorderPainter extends CustomPainter {
   }
 
   @override
-  /// Determina si debe repintarse por cambios en props
   bool shouldRepaint(_LogoBorderPainter old) =>
       old.progress != progress ||
       old.color != color ||

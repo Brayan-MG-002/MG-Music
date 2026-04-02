@@ -1,43 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 import 'package:mg_music/ui/mobile/Home/Settings/components/link_dialog.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   @override
-  /// Construye la pantalla “Acerca de”
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
-    return Scaffold(
-      backgroundColor: AppColors.background(mode),
-      appBar: AppBar(
-        backgroundColor: AppColors.background(mode),
-        title: Text(
-          'Acerca de',
-          style: TextStyle(color: AppColors.textPrimary(mode)),
-        ),
-        iconTheme: IconThemeData(color: AppColors.textPrimary(mode)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20.0),
+    return Container(
+      color: Colors.transparent,
+      child: ListView(
+        padding: EdgeInsets.all(20.r),
         children: [
-          Center(child: Image.asset('assets/MG-I-T.png', width: 100)),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.h),
+          Center(child: Image.asset('assets/MG-I-T.png', width: 100.r)),
+          SizedBox(height: 20.h),
           Center(
             child: Text(
               'MG Music',
               style: TextStyle(
                 color: AppColors.textPrimary(mode),
-                fontSize: 24,
+                fontSize: 24.sp,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(height: 30),
+          SizedBox(height: 30.h),
           _buildSection(
             title: 'Inspiración',
             icon: Ionicons.heart,
@@ -60,19 +54,29 @@ class AboutPage extends StatelessWidget {
             mode: mode,
             child: _buildGithubButton(context, mode),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.h),
           Center(
-            child: Text(
-              'MG Music V1.1.1',
-              style: TextStyle(color: AppColors.textSecondary(mode)),
+            child: FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                final version = snapshot.data?.version ?? 'Cargando...';
+                return Text(
+                  'MG Music v$version',
+                  style: TextStyle(
+                    color: AppColors.textSecondary(mode),
+                    fontSize: 12.sp,
+                  ),
+                );
+              },
             ),
           ),
+          SizedBox(height: 200.h),
         ],
       ),
     );
   }
 
-  /// Construye una sección con título, icono y contenido
+
   Widget _buildSection({
     required String title,
     required IconData icon,
@@ -81,8 +85,8 @@ class AboutPage extends StatelessWidget {
     Widget? child,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(20),
+      margin: EdgeInsets.only(bottom: 20.h),
+      padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -92,10 +96,10 @@ class AboutPage extends StatelessWidget {
             AppColors.background(mode).withOpacity(0.85),
           ],
         ),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(15.r),
         border: Border.all(
           color: AppColors.themeBorder(mode).withOpacity(0.5),
-          width: 1,
+          width: 1.w,
         ),
       ),
       child: Column(
@@ -103,34 +107,34 @@ class AboutPage extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppColors.primaryBlueMid, size: 24),
-              const SizedBox(width: 10),
+              Icon(icon, color: AppColors.primaryBlueMid, size: 24.r),
+              SizedBox(width: 10.w),
               Text(
                 title,
                 style: TextStyle(
                   color: AppColors.textPrimary(mode),
-                  fontSize: 18,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 15),
+          SizedBox(height: 15.h),
           Text(
             content,
             style: TextStyle(
               color: AppColors.textSecondary(mode),
-              fontSize: 15,
+              fontSize: 15.sp,
               height: 1.5,
             ),
           ),
-          if (child != null) ...[const SizedBox(height: 15), child],
+          if (child != null) ...[SizedBox(height: 15.h), child],
         ],
       ),
     );
   }
 
-  /// Botón que abre el repositorio en GitHub usando LinkDialog
+
   Widget _buildGithubButton(BuildContext context, AppThemeMode mode) {
     return InkWell(
       onTap: () {
@@ -143,14 +147,15 @@ class AboutPage extends StatelessWidget {
           url: 'https://github.com/Brayan-MG-002/MG-Music',
         );
       },
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(10.r),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
+        padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 15.w),
         decoration: BoxDecoration(
           color: AppColors.background(mode).withOpacity(0.5),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(10.r),
           border: Border.all(
             color: AppColors.themeBorder(mode).withOpacity(0.5),
+            width: 1.w,
           ),
         ),
         child: Row(
@@ -159,9 +164,9 @@ class AboutPage extends StatelessWidget {
             Icon(
               Ionicons.logo_github,
               color: AppColors.textPrimary(mode),
-              size: 20,
+              size: 20.r,
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10.w),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,14 +176,14 @@ class AboutPage extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textPrimary(mode),
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 14.sp,
                     ),
                   ),
                   Text(
                     'Para transparencia. No distribuir.',
                     style: TextStyle(
                       color: AppColors.textSecondary(mode),
-                      fontSize: 12,
+                      fontSize: 12.sp,
                     ),
                   ),
                 ],
@@ -187,7 +192,7 @@ class AboutPage extends StatelessWidget {
             Icon(
               Ionicons.open_outline,
               color: AppColors.primaryBlueMid,
-              size: 16,
+              size: 16.r,
             ),
           ],
         ),

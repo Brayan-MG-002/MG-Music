@@ -10,17 +10,18 @@ import 'package:mg_music/services/ui/responsive_service.dart';
 class MobileHomeHeader extends StatelessWidget {
   final bool isGridView;
   final bool isScanning; // Nuevo
+  final int selectedCount; // Nuevo
   final VoidCallback onViewModeChanged;
 
   const MobileHomeHeader({
     super.key,
     required this.isGridView,
     required this.isScanning,
+    this.selectedCount = 0,
     required this.onViewModeChanged,
   });
 
   @override
-  /// Construye encabezado con toggle de vista, título o contador, y shuffle
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
@@ -85,10 +86,10 @@ class MobileHomeHeader extends StatelessWidget {
                               child: Icon(
                                 isGridView ? Ionicons.list : Ionicons.grid,
                                 key: ValueKey<bool>(isGridView),
-                                color: Colors.white,
+                                color: AppColors.textPrimary(mode),
                               ),
                             ),
-                             onPressed: onViewModeChanged,
+                            onPressed: onViewModeChanged,
                             splashRadius: 20.r,
                           ),
                         ),
@@ -126,6 +127,16 @@ class MobileHomeHeader extends StatelessWidget {
                             valueListenable:
                                 AudioPlayerManager().sleepEndTimeNotifier,
                             builder: (context, endTime, _) {
+                              if (selectedCount > 0) {
+                                return Text(
+                                  '$selectedCount seleccionadas',
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary(mode),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15.sp,
+                                  ),
+                                );
+                              }
                               if (endTime == null) {
                                 if (isScanning) {
                                   return StreamBuilder<int>(
@@ -141,7 +152,7 @@ class MobileHomeHeader extends StatelessWidget {
                                         style: TextStyle(
                                           color: AppColors.textPrimary(mode),
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 16.sp,
+                                          fontSize: 15.sp,
                                         ),
                                       );
                                     },
@@ -152,7 +163,7 @@ class MobileHomeHeader extends StatelessWidget {
                                   style: TextStyle(
                                     color: AppColors.textPrimary(mode),
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 16.sp,
+                                    fontSize: 15.sp,
                                   ),
                                 );
                               }
@@ -190,7 +201,7 @@ class MobileHomeHeader extends StatelessWidget {
                                         style: TextStyle(
                                           color: AppColors.textPrimary(mode),
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 14.sp,
+                                          fontSize: 13.sp,
                                         ),
                                       ),
                                       SizedBox(width: 8.w),
@@ -258,7 +269,7 @@ class MobileHomeHeader extends StatelessWidget {
                               icon: Icon(
                                 Ionicons.shuffle,
                                 color: isShuffle
-                                    ? Colors.lightBlueAccent
+                                    ? AppColors.primaryBlueFixed
                                     : AppColors.icon(mode),
                               ),
                               onPressed: () =>

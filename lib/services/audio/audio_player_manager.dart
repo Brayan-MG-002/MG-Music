@@ -10,7 +10,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
 import 'package:mg_music/services/audio/playback_handler.dart';
 import 'package:mg_music/services/audio/playlist_handler.dart';
-import 'package:mg_music/services/audio/audio_handler.dart';
 import 'package:mg_music/services/audio/state_manager.dart';
 import 'package:mg_music/services/models/song_model.dart';
 import 'package:mg_music/services/errors/error_service.dart';
@@ -24,7 +23,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
   late final PlaylistHandler _playlistHandler;
   late final StateManager _stateManager;
   late final AdoHandler _adoHandler;
-  MyAudioHandler? _audioHandler;
 
   bool _isInitialized = false;
 
@@ -89,11 +87,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
     _adoHandler = AdoHandler();
   }
 
-  /// Establece el manejador de metadatos/acciones del sistema
-  void setAudioHandler(MyAudioHandler handler) {
-    _audioHandler = handler;
-  }
-
   /// Inicializa preferencias, listeners y watchdog
   Future<void> init() async {
     if (_isInitialized) return;
@@ -124,7 +117,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
         }
       }
 
-      unawaited(_updateNotification());
     });
 
     _watchdogTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
@@ -153,14 +145,8 @@ class AudioPlayerManager with WidgetsBindingObserver {
     _player.positionStream.listen((pos) {
       positionNotifier.value = pos;
       _throttleSavePosition(pos);
-
-      final durMs = durationNotifier.value.inMilliseconds;
-      final posMs = pos.inMilliseconds;
-      if (durMs > 0 && posMs > 0 && posMs >= durMs - 400) {
-        if (!_isHandlingCompletion) {
-          unawaited(_handleSongCompleted());
-        }
-      }
+      // Nota: el autoavance lo manejan playerStateStream y el watchdog.
+      // El trigger por posición causaba race conditions con el abort.
     });
 
     _player.durationStream.listen((dur) {
@@ -229,7 +215,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
     _playlistHandler.setShuffleMode(isShuffle);
 
     _notifyActivePlaylist();
-    unawaited(_updateNotification());
   }
 
   /// Alterna entre repetir uno y sin repetir
@@ -254,7 +239,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
   /// Inserta una canción para reproducirla a continuación
   void addNext(LocalSong song) {
     _nextQueue.addFirst(song);
-    unawaited(_updateNotification());
   }
 
   /// Avanza a la siguiente canción respetando cola y modos
@@ -349,9 +333,9 @@ class AudioPlayerManager with WidgetsBindingObserver {
     if (_isHandlingCompletion) return;
     _isHandlingCompletion = true;
     try {
-      try {
-        await pause();
-      } catch (_) {}
+      // NO llamamos pause() aquí: la canción ya terminó naturalmente.
+      // Llamar pause() sobre un player en estado 'completed' genera
+      // PlatformException(abort) que interfiere con el setAudioSource siguiente.
 
       if (sleepTimerNotifier.value == -1) {
         sleepTimerNotifier.value = null;
@@ -366,6 +350,11 @@ class AudioPlayerManager with WidgetsBindingObserver {
         await play();
         return;
       }
+
+      // Pequeño settle antes de reproducir la siguiente canción:
+      // just_audio necesita terminar su ciclo interno de completion
+      // antes de que se le pida un setAudioSource nuevo.
+      await Future.delayed(const Duration(milliseconds: 300));
 
       if (_nextQueue.isNotEmpty) {
         final manualNext = _nextQueue.removeFirst();
@@ -382,13 +371,15 @@ class AudioPlayerManager with WidgetsBindingObserver {
           await playSong(first);
         }
       } else {
-        try {
-          await pause();
-        } catch (_) {}
-        await seek(Duration.zero);
+        // Fin de playlist: solo resetear posición
+        try { await seek(Duration.zero); } catch (_) {}
       }
     } on PlatformException catch (e) {
-      if (e.code != 'abort') {
+      if (e.code == 'abort') {
+        await Future.delayed(const Duration(milliseconds: 800));
+        _isHandlingCompletion = false;
+        if (!_isHandlingCompletion) unawaited(_handleSongCompleted());
+      } else {
         unawaited(
           ErrorService().handleAudioError(
             error: e,
@@ -397,12 +388,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
         );
       }
     } catch (e) {
-      unawaited(
-        ErrorService().handleAudioError(
-          error: e,
-          song: currentSongNotifier.value,
-        ),
-      );
     } finally {
       await Future.delayed(const Duration(milliseconds: 500));
       _isHandlingCompletion = false;
@@ -483,30 +468,42 @@ class AudioPlayerManager with WidgetsBindingObserver {
     unawaited(_stateManager.saveLastPlayedSong(song));
 
     try {
-      final source = _playlistHandler.createSingleSource(song);
-      await _player.setAudioSource(source, initialPosition: initialPosition);
-
-      unawaited(
-        _adoHandler.applyAdoVolumeBoost(
-          _player,
-          song,
-          1.0,
-          boostEnabled: adoBoostEnabledNotifier.value,
-          boostLevel: adoBoostLevelNotifier.value,
-        ),
-      );
-
-      _audioHandler?.updateMetadata(song);
-      await _player.play();
-
-      unawaited(_updateNotification());
+      await _playInternalCore(song, initialPosition);
     } on PlatformException catch (e) {
-      if (e.code != 'abort') {
+      if (e.code == 'abort') {
+        await Future.delayed(const Duration(milliseconds: 500));
+        try {
+          await _playInternalCore(song, Duration.zero);
+        } catch (retryErr) {
+          await _handlePlaybackError(retryErr, song);
+        }
+      } else {
         await _handlePlaybackError(e, song);
       }
     } catch (e) {
       await _handlePlaybackError(e, song);
     }
+  }
+
+  /// Núcleo de reproducción: setAudioSource + play
+  Future<void> _playInternalCore(
+    LocalSong song,
+    Duration initialPosition,
+  ) async {
+    final source = _playlistHandler.createSingleSource(song);
+    await _player.setAudioSource(source, initialPosition: initialPosition);
+
+    unawaited(
+      _adoHandler.applyAdoVolumeBoost(
+        _player,
+        song,
+        1.0,
+        boostEnabled: adoBoostEnabledNotifier.value,
+        boostLevel: adoBoostLevelNotifier.value,
+      ),
+    );
+
+    await _player.play();
   }
 
   /// Maneja errores de reproducción con reintentos globales (3 veces) y autoavance
@@ -524,7 +521,6 @@ class AudioPlayerManager with WidgetsBindingObserver {
                           (error is PlatformException && (error.code == 'file_not_found' || error.code == '0'));
 
     if (isMissingFile) {
-      debugPrint('📂 Archivo no encontrado. Saltando reintentos y avanzando.');
       _playRetryCount = 0;
       unawaited(ErrorService().handleAudioError(error: error, song: song));
       
@@ -536,16 +532,13 @@ class AudioPlayerManager with WidgetsBindingObserver {
     // 1. Reintento silencioso (cualquier error)
     if (_playRetryCount < 3) {
       _playRetryCount++;
-      debugPrint('⚠️ Error de reproducción detectado. Reintentando... ($_playRetryCount/3)');
       
-      // Pequeño delay de recuperación para hardware/red
       await Future.delayed(const Duration(milliseconds: 1200));
       return _playInternal(song);
     }
 
     // 2. Fallo total tras 3 intentos
-    _playRetryCount = 0; // Reset para la siguiente canción
-    debugPrint('❌ Fallo persistente tras 3 reintentos. Mostrando reporte.');
+    _playRetryCount = 0;
 
     // Notificamos al servicio de errores (esto muestra el modal)
     unawaited(
@@ -589,8 +582,8 @@ class AudioPlayerManager with WidgetsBindingObserver {
     currentSongNotifier.value = song;
     _playlistHandler.setCurrentSong(song);
     _adoHandler.applyAdoVolumeBoost(_player, song, 1.0);
-    _audioHandler?.updateMetadata(song);
-    unawaited(_updateNotification());
+    // La notificación se actualiza automáticamente desde MyAudioHandler
+    // mediante su listener en currentSongNotifier.
   }
 
   /// Guarda la posición de la pista actual si está sonando
@@ -618,14 +611,8 @@ class AudioPlayerManager with WidgetsBindingObserver {
     }
   }
 
-  /// Actualiza la notificación del sistema (si aplica)
-  Future<void> _updateNotification() async {
-  }
-
-  /// Fuerza un refresco de la notificación
-  Future<void> refreshNotification() async {
-    await _updateNotification();
-  }
+  /// Fuerza un refresco de la notificación (no-op: el handler se auto-actualiza)
+  Future<void> refreshNotification() async {}
 
   /// Emite la playlist activa a la UI
   void _notifyActivePlaylist() {

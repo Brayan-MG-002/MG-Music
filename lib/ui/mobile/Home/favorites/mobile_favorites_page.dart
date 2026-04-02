@@ -19,6 +19,7 @@ import 'package:mg_music/services/ui/global_modal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mg_music/ui/mobile/Home/Home/components/mobile_song_item.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class MobileFavoritesPage extends StatefulWidget {
   final ValueChanged<bool> onSelectionModeChanged;
@@ -50,12 +51,9 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
   bool _isLoading = true;
   bool _isGridView = true;
 
-  @override
-  /// Mantiene el estado al cambiar de pestañas
   bool get wantKeepAlive => true;
 
   @override
-  /// Inicializa animaciones y carga de favoritos
   void initState() {
     super.initState();
     _glowController = AnimationController(
@@ -68,7 +66,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
   }
 
   @override
-  /// Libera controladores y listeners
   void dispose() {
     _glowController.dispose();
     _favoritesManager.favoritePathsNotifier.removeListener(_loadFavoriteSongs);
@@ -99,7 +96,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
     _processAndSetFavorites(allSongs, mainId, isGrid);
   }
 
-  /// Procesa canciones, filtra favoritas y actualiza estado
   void _processAndSetFavorites(
     List<LocalSong> songs,
     String? mainId,
@@ -165,7 +161,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
     );
   }
 
-  /// Actualiza el brillo del header según si la principal es Ado
   void _updateGlowState() {
     if (_favoriteSongs.isEmpty) {
       if (_glowController.isAnimating) {
@@ -195,14 +190,12 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
     }
   }
 
-  /// Reproduce favoritos (llamado desde el MainScreen)
   void playFavorites() {
     if (_favoriteSongs.isNotEmpty) {
       _playerManager.playSong(_favoriteSongs.first, _favoriteSongs);
     }
   }
 
-  /// Entra o confirma eliminación en modo selección (MainScreen)
   void handleDeleteAction() {
     if (!_isSelectionMode) {
       setState(() {
@@ -229,7 +222,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
     }
   }
 
-  /// Elimina las canciones seleccionadas de favoritos
   void _deleteSelectedSongs() async {
     final songsToDelete = _favoriteSongs
         .where((s) => _selectedIds.contains(s.id.toString()))
@@ -266,7 +258,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
     _exitSelectionMode();
   }
 
-  /// Sale del modo selección
   void _exitSelectionMode() {
     setState(() {
       _isSelectionMode = false;
@@ -275,7 +266,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
     widget.onSelectionModeChanged(false);
   }
 
-  /// Alterna la selección de una canción
   void _toggleSelection(String songId) {
     setState(() {
       if (_selectedIds.contains(songId)) {
@@ -287,7 +277,6 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
   }
 
   @override
-  /// Construye la vista de favoritos (grid o lista) con header y acciones
   Widget build(BuildContext context) {
     super.build(context);
     final mode = context.watch<ThemeService>().mode;
@@ -303,13 +292,16 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
           children: [
             Icon(
               Ionicons.heart_dislike_outline,
-              size: 60,
+              size: 60.r,
               color: AppColors.textSecondary(mode),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             Text(
               'No tienes favoritos aún',
-              style: TextStyle(color: AppColors.textSecondary(mode)),
+              style: TextStyle(
+                color: AppColors.textSecondary(mode),
+                fontSize: 14.sp,
+              ),
             ),
           ],
         ),
@@ -373,16 +365,16 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
             Widget songsBody;
             if (_isGridView) {
               songsBody = SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 20,
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.w,
+                  vertical: 20.h,
                 ),
                 sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     childAspectRatio: 0.7,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16.w,
+                    mainAxisSpacing: 16.h,
                   ),
                   delegate: SliverChildBuilderDelegate((context, index) {
                     return AnimationConfiguration.staggeredGrid(
@@ -412,9 +404,9 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
                       verticalOffset: 50.0,
                       child: FadeInAnimation(
                         child: Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
+                          padding: EdgeInsets.only(bottom: 8.h),
                           child: SizedBox(
-                            height: 80,
+                            height: 80.h,
                             child: _buildSongItem(
                               _favoriteSongs[index],
                               false,
@@ -437,10 +429,10 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
                   isGlowActive: isMainSongAdo,
                   glowAnimation: _glowController,
                   bottom: header,
-                  expandedHeight: 300.0,
+                  expandedHeight: 300.h,
                 ),
                 songsBody,
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                SliverToBoxAdapter(child: SizedBox(height: 120.h)),
               ],
             );
 
@@ -485,8 +477,8 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
               onLongPress: () => _handleItemLongPress(song),
             ),
             Positioned(
-              top: 5,
-              right: 5,
+              top: 5.h,
+              right: 5.w,
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 transitionBuilder: (child, animation) {
@@ -515,7 +507,7 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
                               color: isSelected
                                   ? AppColors.primaryBlueMid
                                   : AppColors.textPrimary(mode),
-                              size: 24,
+                              size: 24.r,
                             ),
                           ),
                         ),

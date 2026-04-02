@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Página principal de inicio TV — carga progresiva, tema y playlist Ado automática
+// Página de inicio para la interfaz de TV: carga progresiva de biblioteca, detección de canciones de Ado y navegación por grilla.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -16,6 +16,9 @@ import 'package:ionicons/ionicons.dart';
 import 'tv_home_song_item.dart';
 import 'tv_home_top_bar.dart';
 import 'tv_home_dialogs.dart';
+import 'package:mg_music/ui/mobile/Home/Settings/components/folder_settings_modal.dart';
+import 'package:mg_music/services/ui/song_context_menu_service.dart';
+import 'package:mg_music/ui/mobile/Home/EditSong/edit_song_page.dart';
 
 class TvHomePage extends StatefulWidget {
   final VoidCallback onOpenPlayer;
@@ -44,23 +47,28 @@ class _TvHomePageState extends State<TvHomePage>
   bool get wantKeepAlive => true;
 
   @override
-  /// Inicializa reproductor, carga canciones y suscribe scroll
   void initState() {
     super.initState();
     _playerManager.init();
+    SongFetcher.onLibraryChanged.addListener(_onLibraryChanged);
     _loadSongs();
     _playerManager.currentSongNotifier.addListener(_scrollToCurrentSong);
   }
 
+  void _onLibraryChanged() {
+    if (mounted) {
+      _loadSongs();
+    }
+  }
+
   @override
-  /// Limpia listeners y controladores
   void dispose() {
+    SongFetcher.onLibraryChanged.removeListener(_onLibraryChanged);
     _playerManager.currentSongNotifier.removeListener(_scrollToCurrentSong);
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Carga canciones con modo progresivo y actualiza estado
   Future<void> _loadSongs() async {
     if (_playerManager.cachedSongs.isNotEmpty) {
       if (mounted) {
@@ -120,7 +128,6 @@ class _TvHomePageState extends State<TvHomePage>
     _verifyAdoSongs(freshSongs);
   }
 
-  /// Verifica canciones de Ado y actualiza la playlist automática
   Future<void> _verifyAdoSongs(List<LocalSong> songs) async {
     final adoSongs = songs.where((s) => AdoHandler.isAdo(s)).toList();
     final hasAdo = adoSongs.isNotEmpty;
@@ -161,11 +168,7 @@ class _TvHomePageState extends State<TvHomePage>
     }
   }
 
-  // ═══════════════════════════════════════════
-  //  Sorting / Filtering
-  // ═══════════════════════════════════════════
 
-  /// Ordena mostrando primero canciones de Ado y actualiza playlist
   void _sortAdoPrimero() {
     _displayedSongs.sort((a, b) {
       final aAdo = AdoHandler.isAdo(a);
@@ -177,7 +180,6 @@ class _TvHomePageState extends State<TvHomePage>
     _playerManager.updatePlaylist(_displayedSongs);
   }
 
-  /// Ordena alfabéticamente ascendente o descendente
   void _sortAlpha(bool ascending) {
     setState(() {
       _isAscending = ascending;
@@ -191,7 +193,6 @@ class _TvHomePageState extends State<TvHomePage>
     });
   }
 
-  /// Filtra canciones por artista y reordena
   void _filterByArtist(String? artist) {
     setState(() {
       _displayedSongs = artist == null
@@ -207,7 +208,6 @@ class _TvHomePageState extends State<TvHomePage>
     });
   }
 
-  /// Hace scroll automático hasta la canción actual
   void _scrollToCurrentSong() {
     final current = _playerManager.currentSongNotifier.value;
     if (current == null || _displayedSongs.isEmpty) return;
@@ -229,7 +229,6 @@ class _TvHomePageState extends State<TvHomePage>
   }
 
   @override
-  /// Construye la vista principal con top bar y grid
   Widget build(BuildContext context) {
     super.build(context);
     final mode = context.watch<ThemeService>().mode;
@@ -273,32 +272,119 @@ class _TvHomePageState extends State<TvHomePage>
     );
   }
 
-  /// Construye el contenido principal (shimmer o grid)
   Widget _buildContent(AppThemeMode mode) {
     if (_isLoading && _allSongs.isEmpty) {
       return _buildShimmer();
     }
 
     if (_allSongs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Ionicons.musical_notes_outline,
-              color: AppColors.textSecondary(mode),
-              size: 64,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No se encontraron canciones en el dispositivo.',
-              style: TextStyle(
-                color: AppColors.textSecondary(mode),
-                fontSize: 18,
+      return FutureBuilder<SharedPreferences>(
+        future: SharedPreferences.getInstance(),
+        builder: (context, snapshot) {
+          final scanAll = snapshot.data?.getBool('scan_all_device') ?? true;
+          final folders = snapshot.data?.getStringList('music_scan_folders') ?? [];
+          
+          String message = 'No se encontraron canciones en el dispositivo.';
+          String subMessage = 'Verifica que tus carpetas contengan archivos de audio compatibles.';
+          
+          if (!scanAll && folders.isEmpty) {
+            message = 'No has seleccionado carpetas para escanear.';
+            subMessage = 'Configura las ubicaciones de tu música para empezar a usar la aplicación.';
+          }
+
+          return Center(
+            child: AnimationConfiguration.synchronized(
+              duration: const Duration(milliseconds: 700),
+              child: FadeInAnimation(
+                child: ScaleAnimation(
+                  scale: 0.9,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Ionicons.musical_notes_outline,
+                        color: AppColors.textSecondary(mode).withOpacity(0.5),
+                        size: 80,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        message,
+                        style: TextStyle(
+                          color: AppColors.textPrimary(mode),
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        subMessage,
+                        style: TextStyle(
+                          color: AppColors.textSecondary(mode),
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Focus(
+                        child: Builder(
+                          builder: (context) {
+                            final hasFocus = Focus.of(context).hasFocus;
+                            final textColor = hasFocus ? Colors.white : AppColors.textPrimary(mode);
+
+                            return GestureDetector(
+                              onTap: () => FolderSettingsContent.showModal(context),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: AppColors.fabGradient(mode),
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: hasFocus ? Colors.white : AppColors.fabAccent(mode).withOpacity(0.6),
+                                    width: hasFocus ? 3 : 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.fabAccent(mode).withOpacity(hasFocus ? 0.6 : 0.3),
+                                      blurRadius: hasFocus ? 20 : 12,
+                                      spreadRadius: hasFocus ? 4 : 2,
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Ionicons.folder_open_outline, 
+                                      color: textColor,
+                                      size: 28,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Text(
+                                      'Configurar Ubicación',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
+          );
+        }
       );
     }
 
@@ -360,7 +446,18 @@ class _TvHomePageState extends State<TvHomePage>
                             song: song,
                             isAdo: isAdo,
                             onLongPress: () =>
-                                showTvSongOptionsModal(song: song, mode: mode),
+                                SongContextMenuService.showOptions(
+                              context,
+                              song,
+                              isTv: true,
+                              onEditSong: () =>
+                                  Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => EditSongPage(song: song),
+                                ),
+                              ),
+                              onSongDeleted: () => _onLibraryChanged(),
+                            ),
                             onTap: () {
                               if (_playerManager.currentSongNotifier.value?.id ==
                                   song.id) {
@@ -426,7 +523,6 @@ class _TvHomePageState extends State<TvHomePage>
     );
   }
 
-  /// Construye grilla shimmer mientras carga el primer lote
   Widget _buildShimmer() {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),

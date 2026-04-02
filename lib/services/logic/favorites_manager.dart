@@ -16,14 +16,12 @@ class FavoritesManager {
   ValueListenable<List<String>> get favoritePathsNotifier =>
       _favoritePathsNotifier;
 
-  /// Carga los favoritos guardados
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     final favoritePaths = prefs.getStringList(_favoritesKey) ?? [];
     _favoritePathsNotifier.value = favoritePaths;
   }
 
-  /// Añade una canción a favoritos
   Future<void> addFavorite(LocalSong song) async {
     final prefs = await SharedPreferences.getInstance();
     final currentFavorites = _favoritePathsNotifier.value.toList();
@@ -34,7 +32,6 @@ class FavoritesManager {
     }
   }
 
-  /// Elimina una canción de favoritos
   Future<bool> removeFavorite(LocalSong song) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -48,10 +45,9 @@ class FavoritesManager {
       _favoritePathsNotifier.value = currentFavorites;
       await prefs.setStringList(_favoritesKey, currentFavorites);
     }
-    return true; // Se eliminó correctamente o no estaba
+    return true;
   }
 
-  /// Alterna el estado favorito de una canción
   Future<bool> toggleFavorite(LocalSong song) async {
     if (isFavorite(song)) {
       return await removeFavorite(song);
@@ -61,30 +57,25 @@ class FavoritesManager {
     }
   }
 
-  /// Verifica si una canción está en favoritos
   bool isFavorite(LocalSong song) {
     return _favoritePathsNotifier.value.contains(song.path);
   }
 
-  /// Establece la canción principal protegida contra eliminación
   Future<void> setMainFavorite(LocalSong song) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('main_favorite_song_id', song.id.toString());
   }
 
-  /// Verifica si es la favorita principal
   Future<bool> isMainFavorite(LocalSong song) async {
     final prefs = await SharedPreferences.getInstance();
     final mainId = prefs.getString('main_favorite_song_id');
     return mainId == song.id.toString();
   }
 
-  /// Retorna la lista de rutas de canciones favoritas
   List<String> getFavoritePaths() {
     return _favoritePathsNotifier.value;
   }
 
-  /// Obtiene el id de la favorita principal
   Future<String?> getMainFavoriteId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('main_favorite_song_id');

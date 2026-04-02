@@ -3,7 +3,6 @@
 
 import 'dart:typed_data';
 
-/// Representa una canción almacenada localmente en el dispositivo
 class LocalSong {
   final int id;
   final String title;

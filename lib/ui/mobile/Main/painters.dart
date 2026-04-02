@@ -8,7 +8,6 @@ class AppBarPainter extends CustomPainter {
   AppBarPainter({required this.borderColor, required this.mode});
 
   @override
-  /// Pinta el app bar con gradiente y borde curvo
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final paint = Paint()
@@ -17,12 +16,12 @@ class AppBarPainter extends CustomPainter {
         end: Alignment.centerRight,
         colors: mode == AppThemeMode.dark
             ? [
-                Colors.blue.shade900.withOpacity(0.6),
-                Colors.blue.shade900.withOpacity(0.2),
+                AppColors.primaryBlueMid.withOpacity(0.6),
+                AppColors.primaryBlueMid.withOpacity(0.2),
               ]
             : [
                 Colors.white.withOpacity(0.9),
-                Colors.blue.shade300.withOpacity(0.6),
+                AppColors.primaryBlueMid.withOpacity(0.6),
               ],
       ).createShader(rect)
       ..style = PaintingStyle.fill;
@@ -103,11 +102,11 @@ class NavBarPainter extends CustomPainter {
         end: Alignment.centerRight,
         colors: mode == AppThemeMode.dark
             ? [
-                Colors.blue.shade900.withOpacity(0.2),
-                Colors.blue.shade900.withOpacity(0.6),
+                AppColors.primaryBlueMid.withOpacity(0.2),
+                AppColors.primaryBlueMid.withOpacity(0.6),
               ]
             : [
-                Colors.blue.shade300.withOpacity(0.6),
+                AppColors.primaryBlueMid.withOpacity(0.6),
                 Colors.white.withOpacity(0.9),
               ],
       ).createShader(rect)

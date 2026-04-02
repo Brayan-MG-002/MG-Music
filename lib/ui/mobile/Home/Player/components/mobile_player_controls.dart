@@ -45,9 +45,12 @@ class MobilePlayerControls extends StatelessWidget {
                 gradient: RadialGradient(
                   center: Alignment.center,
                   radius: 0.8,
-                  colors: mode == AppThemeMode.dark
-                      ? [Colors.blue.shade900.withOpacity(0.5), Colors.black]
-                      : [Colors.blue.shade200.withOpacity(0.8), Colors.white],
+                  colors: [
+                    mode == AppThemeMode.dark
+                        ? AppColors.primaryBlueMid.withOpacity(0.5)
+                        : AppColors.primaryBlueMid.withOpacity(0.4),
+                    mode == AppThemeMode.dark ? Colors.black : Colors.white,
+                  ],
                 ),
                 boxShadow: [
                   BoxShadow(

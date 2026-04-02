@@ -4,6 +4,8 @@ import 'package:mg_music/services/models/song_model.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
+import 'package:mg_music/ui/mobile/Home/playlist/components/marquee_widget.dart';
 
 class PlaylistDetailHeader extends StatelessWidget
     implements PreferredSizeWidget {
@@ -27,10 +29,9 @@ class PlaylistDetailHeader extends StatelessWidget
   });
 
   @override
-  /// Altura preferida del header
-  Size get preferredSize => const Size.fromHeight(80);
+  Size get preferredSize => Size.fromHeight(95.h);
 
-  /// Formatea duración total de la playlist
+
   String _formatDuration(Duration d) {
     final hours = d.inHours;
     final minutes = d.inMinutes.remainder(60);
@@ -44,14 +45,13 @@ class PlaylistDetailHeader extends StatelessWidget
   }
 
   @override
-  /// Construye el header con título, conteo, duración y botones
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
     return Container(
       height: preferredSize.height,
-      alignment: Alignment.bottomCenter,
-      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 15),
+      alignment: Alignment.center,
+      padding: EdgeInsets.only(left: 20.w, right: 20.w, bottom: 5.h, top: 20.h),
       decoration: const BoxDecoration(color: Colors.transparent),
       child: AnimationLimiter(
         child: Row(
@@ -74,45 +74,49 @@ class PlaylistDetailHeader extends StatelessWidget
                       textAlign: TextAlign.start,
                       style: TextStyle(
                         color: AppColors.textPrimary(mode),
-                        fontSize: 22,
+                        fontSize: MediaQuery.of(context).size.height < 700 ? 20.sp : 22.sp,
                         fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '${songs.length} canciones',
-                            style: TextStyle(
-                              color: AppColors.textSecondary(mode),
-                              fontSize: 13,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final screenHeight = MediaQuery.of(context).size.height;
+                        final isCompact = screenHeight < 700;
+                        final subtitleSize = isCompact ? 11.sp : 13.sp;
+                        
+                        return MarqueeWidget(
+                          child: Row(
+                            children: [
+                              Text(
+                                '${songs.length} canciones',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary(mode),
+                                  fontSize: subtitleSize,
+                                ),
+                                maxLines: 1,
+                              ),
+                              SizedBox(width: isCompact ? 6.w : 8.w),
+                              Icon(
+                                Ionicons.time_outline,
+                                size: isCompact ? 12.r : 14.r,
+                                color: AppColors.textSecondary(mode),
+                              ),
+                              SizedBox(width: 4.w),
+                              Text(
+                                _formatDuration(totalDuration),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary(mode),
+                                  fontSize: subtitleSize,
+                                ),
+                                maxLines: 1,
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Ionicons.time_outline,
-                          size: 14,
-                          color: AppColors.textSecondary(mode),
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            _formatDuration(totalDuration),
-                            style: TextStyle(
-                              color: AppColors.textSecondary(mode),
-                              fontSize: 13,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -161,7 +165,7 @@ class PlaylistDetailHeader extends StatelessWidget
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: mode == AppThemeMode.dark ? Colors.black : Colors.white,
-        border: Border.all(color: AppColors.themeBorder(mode), width: 1.5),
+        border: Border.all(color: AppColors.themeBorder(mode), width: 1.5.w),
         gradient: LinearGradient(
           colors: AppColors.fabGradient(mode),
           begin: Alignment.topLeft,
@@ -170,7 +174,7 @@ class PlaylistDetailHeader extends StatelessWidget
         boxShadow: [
           BoxShadow(
             color: AppColors.fabAccent(mode).withOpacity(0.5),
-            blurRadius: 10,
+            blurRadius: 10.r,
           ),
         ],
       ),
@@ -181,8 +185,8 @@ class PlaylistDetailHeader extends StatelessWidget
           onTap: onTap,
           customBorder: const CircleBorder(),
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Icon(icon, color: AppColors.textPrimary(mode), size: 24),
+            padding: EdgeInsets.all(10.0.r),
+            child: Icon(icon, color: AppColors.textPrimary(mode), size: 20.r),
           ),
         ),
       ),

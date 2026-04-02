@@ -1,10 +1,8 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Servicio para manejo de UI Responsiva y escalado DPI
+// Servicio para la gestión de la adaptabilidad de la UI (Responsividad) y el escalado dinámico de dimensiones según la resolución del dispositivo.
 
 import 'package:flutter/material.dart';
 
-/// Servicio para calcular dimensiones adaptativas según el tamaño de pantalla y DPI.
-/// Utiliza una resolución base (375x812) para proyectar dimensiones proporcionales.
 class ResponsiveService {
   static late MediaQueryData _mediaQueryData;
   static late double screenWidth;
@@ -18,7 +16,6 @@ class ResponsiveService {
   static bool _initialized = false;
   static bool get isInitialized => _initialized;
 
-  /// Inicializa los datos del dispositivo. Debe llamarse en el build de la pantalla principal.
   static void init(BuildContext context) {
     _mediaQueryData = MediaQuery.of(context);
     screenWidth = _mediaQueryData.size.width;
@@ -31,43 +28,39 @@ class ResponsiveService {
     _initialized = true;
   }
 
-  /// Indica si el dispositivo es una tablet (ancho > 600)
   static bool get isTablet => screenWidth > 600;
 
-  /// Escala el ancho de forma proporcional.
   static double w(double logicalWidth) {
     final scale = screenWidth / baseWidth;
-    // Crecimiento moderado (máximo 22%)
-    final clampedScale = scale.clamp(0.8, 1.22);
-    return logicalWidth * clampedScale;
+    final dampenedScale = scale > 1 ? (1 + (scale - 1) * 0.6) : scale;
+    return logicalWidth * dampenedScale.clamp(0.7, 1.15);
   }
 
-  /// Escala el alto de forma proporcional.
   static double h(double logicalHeight) {
     final scale = screenHeight / baseHeight;
-    // Crecimiento vertical moderado (máximo 15%)
-    final clampedScale = scale.clamp(0.8, 1.15);
-    return logicalHeight * clampedScale;
+    final dampenedScale = scale > 1 ? (1 + (scale - 1) * 0.5) : scale;
+    return logicalHeight * dampenedScale.clamp(0.7, 1.12);
   }
 
-  /// Escala el tamaño de fuente considerando resolución y DPI.
   static double sp(double fontSize) {
-    // Usar el promedio de escalas pero con peso en el ancho
     final wScale = screenWidth / baseWidth;
     final hScale = screenHeight / baseHeight;
-    final avgScale = (wScale * 0.7 + hScale * 0.3).clamp(0.85, 1.2);
     
-    return fontSize * avgScale * textScaleFactor;
+    final rawScale = (wScale * 0.6 + hScale * 0.4);
+    final dampenedScale = rawScale > 1 ? (1 + (rawScale - 1) * 0.35) : rawScale;
+    
+    final finalScale = dampenedScale.clamp(0.70, 1.20);
+    
+    return fontSize * finalScale * textScaleFactor;
   }
 
-  /// Escala un radio de borde o valor circular.
   static double radius(double r) {
     final scale = screenWidth / baseWidth;
-    return r * scale.clamp(0.8, 1.25);
+    final dampenedScale = scale > 1 ? (1 + (scale - 1) * 0.6) : scale;
+    return r * dampenedScale.clamp(0.7, 1.18);
   }
 }
 
-/// Extensiones para facilitar el uso: 10.w, 16.sp, etc.
 extension ResponsiveExtension on num {
   double get w => ResponsiveService.w(toDouble());
   double get h => ResponsiveService.h(toDouble());

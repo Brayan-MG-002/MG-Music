@@ -1,17 +1,16 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Diálogo de carga durante búsqueda de actualizaciones
+// Pantalla de carga animada que se muestra durante la verificación de nuevas versiones.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
-/// Diálogo de carga que se muestra mientras se buscan actualizaciones
 class UpdateLoadingDialog extends StatelessWidget {
   const UpdateLoadingDialog({super.key});
 
   @override
-  /// Construye el diálogo de carga mientras se buscan actualizaciones
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
@@ -36,40 +35,41 @@ class UpdateLoadingDialog extends StatelessWidget {
                   ],
                   stops: const [0.0, 0.7],
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(20.r),
                 border: Border.all(
                   color: AppColors.themeBorder(mode),
-                  width: 1.5,
+                  width: 1.2.w,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.themeBorder(mode).withOpacity(0.3),
-                    blurRadius: 15,
-                    spreadRadius: 1,
+                    blurRadius: 12.r,
+                    spreadRadius: 1.r,
                   ),
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.all(30.0),
+                padding: EdgeInsets.all(24.r),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(
-                      height: 50,
-                      width: 50,
+                    SizedBox(
+                      height: 40.r,
+                      width: 40.r,
                       child: CircularProgressIndicator(
                         valueColor: AlwaysStoppedAnimation<Color>(
                           AppColors.primaryBlueMid,
                         ),
-                        strokeWidth: 2.5,
+                        strokeWidth: 2.r,
                       ),
                     ),
-                    const SizedBox(height: 25),
+                    SizedBox(height: 20.h),
                     Text(
                       'Buscando actualizaciones...',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: AppColors.textPrimary(mode),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15.sp,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -77,6 +77,7 @@ class UpdateLoadingDialog extends StatelessWidget {
                       'Por favor espera',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary(mode),
+                        fontSize: 12.sp,
                       ),
                     ),
                   ],

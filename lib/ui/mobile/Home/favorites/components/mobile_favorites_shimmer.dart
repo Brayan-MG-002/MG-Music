@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
+import 'package:mg_music/services/ui/responsive_service.dart';
 
 class MobileFavoritesShimmer extends StatefulWidget {
   final bool isGridView;
@@ -17,7 +18,6 @@ class _MobileFavoritesShimmerState extends State<MobileFavoritesShimmer>
   late AnimationController _controller;
 
   @override
-  /// Inicializa controlador del shimmer
   void initState() {
     super.initState();
     _controller = AnimationController(
@@ -27,14 +27,12 @@ class _MobileFavoritesShimmerState extends State<MobileFavoritesShimmer>
   }
 
   @override
-  /// Libera el controlador
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
   @override
-  /// Construye shimmer de grilla o lista
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
 
@@ -49,16 +47,15 @@ class _MobileFavoritesShimmerState extends State<MobileFavoritesShimmer>
     );
   }
 
-  /// Construye shimmer en grilla
   Widget _buildGrid(AppThemeMode mode) {
     return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         childAspectRatio: 0.7,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+        crossAxisSpacing: 16.w,
+        mainAxisSpacing: 16.h,
       ),
       itemCount: 12,
       itemBuilder: (context, index) {
@@ -71,7 +68,7 @@ class _MobileFavoritesShimmerState extends State<MobileFavoritesShimmer>
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface(mode),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12.r),
                 ),
               ),
             ),
@@ -81,10 +78,9 @@ class _MobileFavoritesShimmerState extends State<MobileFavoritesShimmer>
     );
   }
 
-  /// Construye shimmer en lista
   Widget _buildList(AppThemeMode mode) {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
       physics: const NeverScrollableScrollPhysics(),
       itemCount: 10,
       itemBuilder: (context, index) {
@@ -95,11 +91,11 @@ class _MobileFavoritesShimmerState extends State<MobileFavoritesShimmer>
             verticalOffset: 50.0,
             child: FadeInAnimation(
               child: Container(
-                height: 80,
-                margin: const EdgeInsets.only(bottom: 10),
+                height: 80.h,
+                margin: EdgeInsets.only(bottom: 10.h),
                 decoration: BoxDecoration(
                   color: AppColors.surface(mode),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12.r),
                 ),
               ),
             ),

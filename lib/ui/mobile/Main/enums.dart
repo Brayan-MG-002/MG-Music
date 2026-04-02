@@ -1,2 +1,1 @@
-// Tipos de ordenamiento para la lista de canciones
-enum SortType { patrona, alphabetical, inverse }
+enum SortType { patrona, alphabetical, inverse, byDate }

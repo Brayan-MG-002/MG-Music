@@ -5,7 +5,6 @@ class LandscapeWarningScreen extends StatelessWidget {
   const LandscapeWarningScreen({super.key});
 
   @override
-  /// Construye una pantalla de aviso para orientación horizontal
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,

@@ -1,5 +1,5 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Pantalla principal para TV con navegación lateral y reproductor
+// Pantalla principal para TV que gestiona la navegación lateral, el reproductor completo y el contenido dinámico.
 
 import 'package:flutter/material.dart';
 import 'package:animations/animations.dart';
@@ -11,9 +11,6 @@ import 'package:mg_music/ui/tv/Home/Favorites/tv_favorites_page.dart';
 import 'package:mg_music/ui/tv/Home/Playlist/tv_playlists_page.dart';
 import 'package:mg_music/ui/tv/Home/Settings/tv_settings_page.dart';
 import 'package:mg_music/ui/tv/tv_exit_dialog.dart';
-import 'package:mg_music/services/logic/update_service.dart';
-import 'package:mg_music/ui/shared/screens/update_dialog.dart';
-
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/ui/tv/Main/tv_sidebar.dart';
@@ -30,19 +27,13 @@ class _TvMainScreenState extends State<TvMainScreen> {
   bool _showFullPlayer = false;
 
   @override
-  /// Inicializa gestores y agenda verificación de actualizaciones
   void initState() {
     super.initState();
     FavoritesManager().init();
     PlaylistManager().init();
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _checkForUpdates();
-    });
   }
 
   @override
-  /// Construye el layout principal con barra lateral y área de contenido
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
@@ -108,22 +99,7 @@ class _TvMainScreenState extends State<TvMainScreen> {
     );
   }
 
-  /// Verifica si hay actualizaciones disponibles
-  Future<void> _checkForUpdates() async {
-    if (!mounted) return;
-    final updateInfo = await UpdateService.checkForUpdate();
 
-    if (updateInfo['hasUpdate'] && mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) =>
-            UpdateDialog(versionData: updateInfo['data'], isTv: true),
-      );
-    }
-  }
-
-  /// Construye la página de contenido según el índice
   Widget _buildContentPage(int index) {
     switch (index) {
       case 0:

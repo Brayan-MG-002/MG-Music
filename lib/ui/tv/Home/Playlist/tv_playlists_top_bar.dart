@@ -1,4 +1,5 @@
-// Barra superior de Playlists en TV
+// Copyright © 2026 Brayan Medrano - MG Music
+// Barra superior para la sección de listas de reproducción en TV, con acceso a la creación de nuevas playlists.
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
@@ -11,7 +12,6 @@ class TvPlaylistsTopBar extends StatelessWidget {
   const TvPlaylistsTopBar({super.key, required this.onCreate});
 
   @override
-  /// Construye la barra con título y acción de crear playlist
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return Container(

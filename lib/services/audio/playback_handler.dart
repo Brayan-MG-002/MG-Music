@@ -11,44 +11,37 @@ class PlaybackHandler {
 
   PlaybackHandler(this._player);
 
-  /// Reproduce el audio
   Future<void> play() async {
     try {
       await _player.play();
     } catch (_) {
-      // Errores silenciados; el flujo principal de AudioPlayerManager maneja el error global
     }
   }
 
-  /// Pausa el audio
   Future<void> pause() async {
     try {
       await _player.pause();
     } catch (_) {}
   }
 
-  /// Cambia la posición de reproducción
   Future<void> seek(Duration position) async {
     try {
       await _player.seek(position);
     } catch (_) {}
   }
 
-  /// Establece el modo de repetición
   Future<void> setLoopMode(LoopMode mode) async {
     try {
       await _player.setLoopMode(mode);
     } catch (_) {}
   }
 
-  /// Establece el volumen del reproductor
   Future<void> setVolume(double volume) async {
     try {
       await _player.setVolume(volume);
     } catch (_) {}
   }
 
-  /// Configura un temporizador de sueño en minutos
   void setSleepTimer(int minutes, Function onTimerEnd) {
     _sleepTimer?.cancel();
     if (minutes <= 0) {
@@ -58,12 +51,10 @@ class PlaybackHandler {
     _sleepTimer = Timer(duration, () => onTimerEnd());
   }
 
-  /// Cancela el temporizador de sueño
   void cancelSleepTimer() {
     _sleepTimer?.cancel();
   }
 
-  /// Realiza un fundido para cambiar de pista sin cortes
   Future<void> playWithFade(Future<void> Function() playAction) async {
     final originalVolume = _player.volume;
     const steps = 20;
@@ -78,7 +69,7 @@ class PlaybackHandler {
         try {
           await _player.setVolume(vol.clamp(0.0, 1.0));
         } catch (_) {
-          break; // Detener fade si hay error
+          break;
         }
         await Future.delayed(stepDuration);
       }
@@ -105,7 +96,6 @@ class PlaybackHandler {
     } catch (_) {}
   }
 
-  /// Realiza un fade out y pausa al finalizar
   Future<void> fadeOutAndPause() async {
     _originalVolume = _player.volume;
     const steps = 20;

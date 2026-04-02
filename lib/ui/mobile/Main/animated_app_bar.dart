@@ -12,6 +12,8 @@ import 'package:mg_music/ui/mobile/Main/painters.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:mg_music/ui/mobile/Main/search_rotating_artwork.dart';
+import 'package:mg_music/services/ui/ado_experience_service.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:mg_music/services/audio/ado_handler.dart';
 import 'package:mg_music/services/ui/responsive_service.dart';
 
@@ -29,6 +31,9 @@ class AnimatedAppBar extends StatelessWidget {
   final VoidCallback onArtistFilterTap;
   final VoidCallback onToggleFullPlayer;
 
+  final String? subPageTitle;
+  final VoidCallback? onBack;
+
   const AnimatedAppBar({
     super.key,
     required this.selectedIndex,
@@ -43,10 +48,11 @@ class AnimatedAppBar extends StatelessWidget {
     required this.onSortTap,
     required this.onArtistFilterTap,
     required this.onToggleFullPlayer,
+    this.subPageTitle,
+    this.onBack,
   });
 
   @override
-  /// Construye el app bar animado con contenido según estado
   Widget build(BuildContext context) {
     return SimpleFadeAnimation(
       duration: const Duration(milliseconds: 400),
@@ -65,9 +71,7 @@ class AnimatedAppBar extends StatelessWidget {
                 return RepaintBoundary(
                   child: CustomPaint(
                     painter: AppBarPainter(
-                      borderColor: mode == AppThemeMode.dark
-                          ? Colors.blue.shade900
-                          : Colors.blue.shade500,
+                      borderColor: AppColors.themeBorder(mode),
                       mode: mode,
                     ),
                     child: Container(
@@ -107,12 +111,99 @@ class AnimatedAppBar extends StatelessWidget {
     );
   }
 
-  /// Construye el contenido por defecto del app bar
   Widget _buildDefaultAppBarContent() {
+    final playerManager = AudioPlayerManager();
+    return ValueListenableBuilder<LocalSong?>(
+      valueListenable: playerManager.currentSongNotifier,
+      builder: (context, song, _) {
+        final isAdo = song != null && AdoHandler.isAdo(song);
+        final specialEnabled = AdoExperienceService().dedicatedPlayerEnabled;
+        final isSpecialExpanded = showFullPlayer && isAdo && specialEnabled;
+
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: isSpecialExpanded 
+              ? _buildSpecialAppBarContent(context, song)
+              : _buildStandardAppBarContent(context),
+        );
+      }
+    );
+  }
+
+  Widget _buildSpecialAppBarContent(BuildContext context, LocalSong song) {
+    final playerManager = AudioPlayerManager();
+    final mode = context.watch<ThemeService>().mode;
+    
+    return SimpleFadeAnimation(
+      key: const ValueKey('special_app_bar'),
+      delay: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 300),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: playerManager.isShuffleModeNotifier,
+            builder: (context, isShuffle, _) {
+              return IconButton(
+                icon: Icon(
+                  Ionicons.shuffle,
+                  color: isShuffle ? AppColors.primaryBlueFixed : AppColors.textSecondary(mode),
+                ),
+                onPressed: playerManager.toggleShuffleMode,
+              );
+            }
+          ),
+          Expanded(
+            child: MobileMiniPlayer(
+              showVisualizer: false,
+              isSpecialExpanded: true,
+              onTap: onToggleFullPlayer,
+            ),
+          ),
+          ValueListenableBuilder<LoopMode>(
+            valueListenable: playerManager.loopModeNotifier,
+            builder: (context, loopMode, _) {
+              Color color = AppColors.textSecondary(mode);
+              if (loopMode == LoopMode.one || loopMode == LoopMode.all) {
+                 color = AppColors.primaryBlueFixed;
+              }
+              IconData icon = Ionicons.repeat;
+              if (loopMode == LoopMode.one) {
+                 icon = Ionicons.repeat; 
+              }
+              return IconButton(
+                icon: Icon(icon, color: color),
+                onPressed: playerManager.toggleLoopMode,
+              );
+            }
+          ),
+        ]
+      ),
+    );
+  }
+
+  Widget _buildStandardAppBarContent(BuildContext context) {
     const contentDelay = Duration(milliseconds: 400);
 
     Widget iconTransition(Widget child, Animation<double> animation) {
       return FadeTransition(opacity: animation, child: child);
+    }
+
+    Widget contentTransition(Widget child, Animation<double> animation) {
+      final offsetAnimation = CurveTween(curve: Curves.easeOutCubic)
+          .animate(animation)
+          .drive(Tween<Offset>(
+            begin: const Offset(0, 0.1),
+            end: Offset.zero,
+          ));
+
+      return FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: offsetAnimation,
+          child: child,
+        ),
+      );
     }
 
     return SimpleFadeAnimation(
@@ -123,21 +214,40 @@ class AnimatedAppBar extends StatelessWidget {
           return Row(
             children: [
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 400),
                 transitionBuilder: iconTransition,
                 child: _buildLeftAppBarIcon(context),
               ),
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16.0.w),
-                  child: MobileMiniPlayer(
-                    showVisualizer: showFullPlayer,
-                    onTap: onToggleFullPlayer,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: contentTransition,
+                    child: subPageTitle != null
+                        ? Center(
+                            child: Text(
+                              subPageTitle!,
+                              style: TextStyle(
+                                color: AppColors.textPrimary(
+                                  context.read<ThemeService>().mode,
+                                ),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16.sp,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )
+                        : MobileMiniPlayer(
+                            showVisualizer: showFullPlayer,
+                            onTap: onToggleFullPlayer,
+                          ),
                   ),
                 ),
               ),
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 400),
                 transitionBuilder: iconTransition,
                 child: _buildRightAppBarIcon(context),
               ),
@@ -148,8 +258,17 @@ class AnimatedAppBar extends StatelessWidget {
     );
   }
 
-  /// Icono izquierdo según sección/estado
   Widget _buildLeftAppBarIcon(BuildContext context) {
+    if (subPageTitle != null) {
+      return _buildPopAnimation(
+        const ValueKey('back_sub'),
+        _buildTopBarIcon(
+          Ionicons.arrow_back,
+          () => onBack?.call(),
+          context: context,
+        ),
+      );
+    }
     if (selectedIndex == 1 &&
         (playlistsKey.currentState?.isInsidePlaylist ?? false)) {
       return _buildPopAnimation(
@@ -167,7 +286,7 @@ class AnimatedAppBar extends StatelessWidget {
         _buildTopBarIcon(Ionicons.swap_vertical, onSortTap, context: context),
       );
     }
-    if (selectedIndex == 2 && !showFullPlayer && !isFavoritesSelectionMode) {
+    if (selectedIndex == 3 && !showFullPlayer && !isFavoritesSelectionMode) {
       return _buildPopAnimation(
         const ValueKey('play_favs'),
         _buildTopBarIcon(
@@ -183,15 +302,33 @@ class AnimatedAppBar extends StatelessWidget {
     );
   }
 
-  /// Icono derecho según sección/estado
   Widget _buildRightAppBarIcon(BuildContext context) {
+    if (subPageTitle != null) {
+      final playerManager = AudioPlayerManager();
+      return ValueListenableBuilder<LocalSong?>(
+        valueListenable: playerManager.currentSongNotifier,
+        builder: (context, song, _) {
+          if (song == null) return SizedBox(width: 44.w);
+          return ValueListenableBuilder<bool>(
+            valueListenable: playerManager.isPlayingNotifier,
+            builder:
+                (context, isPlaying, _) => SearchRotatingArtwork(
+                  artwork: song.artwork,
+                  isPlaying: isPlaying,
+                  isAdo: AdoHandler.isAdo(song),
+                  onTap: () => playerManager.togglePlayPause(),
+                ),
+          );
+        },
+      );
+    }
     if (selectedIndex == 0 && !showFullPlayer) {
       return _buildPopAnimation(
         const ValueKey('artists'),
         _buildTopBarIcon(Ionicons.people, onArtistFilterTap, context: context),
       );
     }
-    if (selectedIndex == 2 && !showFullPlayer) {
+    if (selectedIndex == 3 && !showFullPlayer) {
       return _buildPopAnimation(
         ValueKey('trash_fav_$isFavoritesSelectionMode'),
         _buildTopBarIcon(
@@ -223,7 +360,6 @@ class AnimatedAppBar extends StatelessWidget {
     );
   }
 
-  /// Barra de búsqueda con carátula rotatoria
   Widget _buildSearchBar() {
     final playerManager = AudioPlayerManager();
     return Builder(
@@ -287,7 +423,6 @@ class AnimatedAppBar extends StatelessWidget {
     );
   }
 
-  /// Construye un icono del app bar con estilo actual
   Widget _buildTopBarIcon(
     IconData icon,
     VoidCallback onTap, {
@@ -295,15 +430,17 @@ class AnimatedAppBar extends StatelessWidget {
     required BuildContext context,
   }) {
     final mode = context.watch<ThemeService>().mode;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isShort = screenHeight < 650;
+    
     return IconButton(
       icon: Icon(icon, color: color ?? AppColors.icon(mode)),
       onPressed: onTap,
       splashRadius: 20.r,
-      iconSize: 24.r, // Asegurar tamaño consistente
+      iconSize: (isShort ? 22 : 24).r, 
     );
   }
 
-  /// Envuelve un widget con animación de escala al aparecer
   Widget _buildPopAnimation(Key key, Widget child) {
     return AnimationConfiguration.synchronized(
       key: key,

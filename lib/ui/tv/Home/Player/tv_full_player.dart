@@ -1,8 +1,7 @@
 // Copyright © 2026 Brayan Medrano - MG Music
-// Reproductor a pantalla completa TV
+// Reproductor a pantalla completa para la interfaz de TV, con visualizador, controles avanzados y gestión de lista de reproducción.
 
 import 'dart:math' as math;
-import 'package:palette_generator/palette_generator.dart';
 import 'package:flutter/material.dart';
 import 'package:animations_plus/animations_plus.dart';
 import 'package:flutter/services.dart';
@@ -10,15 +9,15 @@ import 'package:ionicons/ionicons.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:mg_music/services/audio/audio_player_manager.dart';
 import 'package:mg_music/services/logic/favorites_manager.dart';
-import 'package:mg_music/services/logic/playlist_manager.dart';
 import 'package:mg_music/services/models/song_model.dart';
 import 'package:mg_music/services/logic/tv_full_player_logic.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
 import 'package:mg_music/services/ui/theme_service.dart';
 import 'package:provider/provider.dart';
 import 'package:mg_music/services/ui/playlist_action_service.dart';
+import 'package:mg_music/services/ui/song_context_menu_service.dart';
 import 'package:mg_music/services/ui/global_modal_service.dart';
-import 'package:mg_music/services/ui/custom_toast_service.dart';
+import 'package:mg_music/ui/mobile/Home/EditSong/edit_song_page.dart';
 import 'package:mg_music/ui/tv/Home/Player/tv_full_player_timebar.dart';
 
 class TvFullPlayer extends StatefulWidget {
@@ -32,21 +31,18 @@ class _TvFullPlayerState extends State<TvFullPlayer> {
   late final TvFullPlayerLogic _logic;
 
   @override
-  /// Inicializa la lógica del reproductor
   void initState() {
     super.initState();
     _logic = TvFullPlayerLogic();
   }
 
   @override
-  /// Libera recursos de la lógica
   void dispose() {
     _logic.dispose();
     super.dispose();
   }
 
   @override
-  /// Construye el reproductor completo con secciones y visualizador
   Widget build(BuildContext context) {
     final playerManager = AudioPlayerManager();
     final mode = context.watch<ThemeService>().mode;
@@ -106,10 +102,7 @@ class _TvFullPlayerState extends State<TvFullPlayer> {
                         builder: (context, showVisualizer, _) {
                           if (!showVisualizer) return const SizedBox.shrink();
                           return _MusicVisualizer(
-                            isPlayingNotifier:
-                                playerManager.isPlayingNotifier,
-                            artwork: currentSong.artwork,
-                            songId: currentSong.id,
+                            isPlayingNotifier: playerManager.isPlayingNotifier,
                           );
                         },
                       ),
@@ -157,7 +150,6 @@ class _TvFullPlayerState extends State<TvFullPlayer> {
   }
 }
 
-// --- Secciones de la UI como Widgets separados ---
 
 class _SongInfoSection extends StatelessWidget {
   final LocalSong currentSong;
@@ -171,7 +163,6 @@ class _SongInfoSection extends StatelessWidget {
   });
 
   @override
-  /// Muestra portada, título, artista y acciones (shuffle, favorito, playlist, repetir)
   Widget build(BuildContext context) {
     return Expanded(
       flex: 3,
@@ -245,6 +236,12 @@ class _SongInfoSection extends StatelessWidget {
                       playerManager.toggleShuffleMode,
                     );
                   },
+                ),
+                const SizedBox(width: 10),
+                _buildIconButton(
+                  Ionicons.timer_outline,
+                  AppColors.textPrimary(mode),
+                  () => GlobalModalService.showSleepTimerDialog(context),
                 ),
                 const SizedBox(width: 10),
                 ValueListenableBuilder<List<String>>(
@@ -328,7 +325,6 @@ class _AdoHeartIconState extends State<_AdoHeartIcon>
   late AnimationController _neonController;
 
   @override
-  /// Inicializa controladores de animaciones de corazón Ado
   void initState() {
     super.initState();
     _pulseController = AnimationController(
@@ -383,7 +379,6 @@ class _AdoHeartIconState extends State<_AdoHeartIcon>
   }
 
   @override
-  /// Dibuja el corazón con animaciones compuestas
   Widget build(BuildContext context) {
     return TvFocusableItem(
       borderRadius: 50,
@@ -414,7 +409,7 @@ class _AdoHeartIconState extends State<_AdoHeartIcon>
                 : Ionicons.heart_outline;
             Color color = Colors.white;
             if (widget.isFavorite) {
-              color = widget.isAdo ? Colors.blue.shade900 : Colors.red;
+              color = widget.isAdo ? AppColors.primaryBlue : Colors.red;
             }
 
             List<Shadow> shadows = [];
@@ -422,7 +417,7 @@ class _AdoHeartIconState extends State<_AdoHeartIcon>
               final opacity = _neonController.value;
               shadows = [
                 Shadow(
-                  color: Colors.blue.shade900.withOpacity(0.8 * opacity),
+                  color: AppColors.primaryBlue.withOpacity(0.8 * opacity),
                   blurRadius: 15.0,
                 ),
                 Shadow(
@@ -456,7 +451,6 @@ class _PlaybackControlsSection extends StatelessWidget {
   });
 
   @override
-  /// Botonera vertical de control (anterior, play/pause, siguiente)
   Widget build(BuildContext context) {
     return Expanded(
       flex: 1,
@@ -481,10 +475,9 @@ class _PlaybackControlsSection extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: AppGradients.of(
-                        mode,
-                        GradientDirection.centerOut,
-                      ).colors,
+                      colors: mode == AppThemeMode.dark
+                          ? [AppColors.primaryBlue, Colors.black]
+                          : [AppColors.primaryBlueMid, Colors.white],
                     ),
                     shape: BoxShape.circle,
                   ),
@@ -518,11 +511,7 @@ class _PlaybackControlsSection extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Icon(
-          icon,
-          color: AppColors.textPrimary(mode),
-          size: size,
-        ),
+        child: Icon(icon, color: AppColors.textPrimary(mode), size: size),
       ),
     );
   }
@@ -569,26 +558,36 @@ class _PlaylistSection extends StatelessWidget {
                 onTap: () {
                   playerManager.playSong(song, playerManager.playlist);
                 },
+                onLongPress: () {
+                  SongContextMenuService.showOptions(
+                    context,
+                    song,
+                    isTv: true,
+                    onEditSong: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => EditSongPage(song: song)),
+                    ),
+                  );
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   decoration: BoxDecoration(
                     color: isCurrent
-                        ? Colors.blue.shade900.withOpacity(0.6)
+                        ? AppColors.primaryBlue.withOpacity(0.6)
                         : null,
                     borderRadius: BorderRadius.circular(10),
                     border: isCurrent
-                        ? Border.all(color: Colors.cyanAccent.withOpacity(0.3))
+                        ? Border.all(color: AppColors.primaryBlueMid.withOpacity(0.3))
                         : null,
                   ),
                   alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
                       if (isCurrent)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 10.0),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10.0),
                           child: Icon(
                             Ionicons.musical_note,
-                            color: Colors.cyanAccent,
+                            color: AppColors.primaryBlueMid,
                             size: 18,
                           ),
                         ),
@@ -601,8 +600,9 @@ class _PlaylistSection extends StatelessWidget {
                             color: isCurrent
                                 ? AppColors.textPrimary(mode)
                                 : AppColors.textSecondary(mode),
-                            fontWeight:
-                                isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isCurrent
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             fontSize: isCurrent ? 16 : 14,
                           ),
                         ),
@@ -621,13 +621,9 @@ class _PlaylistSection extends StatelessWidget {
 
 class _MusicVisualizer extends StatefulWidget {
   final ValueNotifier<bool> isPlayingNotifier;
-  final Uint8List? artwork;
-  final int songId;
 
   const _MusicVisualizer({
     required this.isPlayingNotifier,
-    this.artwork,
-    required this.songId,
   });
 
   @override
@@ -635,16 +631,12 @@ class _MusicVisualizer extends StatefulWidget {
 }
 
 class _MusicVisualizerState extends State<_MusicVisualizer>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late AnimationController _heightsController;
-  late AnimationController _colorController;
-  late Animation<Color?> _colorAnimation;
   List<double> _barHeights = [];
-
   final math.Random _random = math.Random();
 
   @override
-  /// Inicializa controladores y color basado en carátula
   void initState() {
     super.initState();
     _barHeights = List.filled(48, 5.0);
@@ -654,71 +646,14 @@ class _MusicVisualizerState extends State<_MusicVisualizer>
       duration: const Duration(seconds: 1),
     )..repeat();
     _heightsController.addListener(_updateHeights);
-
-    _colorController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _colorAnimation = ColorTween(
-      begin: Colors.cyanAccent,
-      end: Colors.cyanAccent,
-    ).animate(_colorController);
-
-    _updateColor();
-  }
-
-  @override
-  void didUpdateWidget(_MusicVisualizer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.artwork != oldWidget.artwork) {
-      _updateColor();
-    }
-    if (widget.songId != oldWidget.songId) {
-      setState(() {
-        _barHeights = List.filled(48, 5.0);
-      });
-    }
-  }
-
-  Future<void> _updateColor() async {
-    if (widget.artwork == null) {
-      _animateToColor(Colors.cyanAccent);
-      return;
-    }
-    try {
-      final generator = await PaletteGenerator.fromImageProvider(
-        ResizeImage(MemoryImage(widget.artwork!), width: 100, height: 100),
-        maximumColorCount: 10,
-      );
-      final newColor =
-          generator.dominantColor?.color ??
-          generator.vibrantColor?.color ??
-          Colors.cyanAccent;
-      _animateToColor(newColor);
-    } catch (_) {
-      _animateToColor(Colors.cyanAccent);
-    }
-  }
-
-  void _animateToColor(Color newColor) {
-    if (!mounted) return;
-    final beginColor = _colorAnimation.value ?? Colors.cyanAccent;
-    setState(() {
-      _colorAnimation = ColorTween(begin: beginColor, end: newColor).animate(
-        CurvedAnimation(parent: _colorController, curve: Curves.easeInOut),
-      );
-    });
-    _colorController.forward(from: 0.0);
   }
 
   void _updateHeights() {
     if (widget.isPlayingNotifier.value) {
       final bool kick = _random.nextDouble() < 0.08;
-
       for (int i = 0; i < _barHeights.length; i++) {
         final double gravity = (i < 12) ? 2.0 : 4.0;
         _barHeights[i] = math.max(5.0, _barHeights[i] - gravity);
-
         double impulseProbability = 0.0;
         double maxImpulseHeight = 0.0;
 
@@ -745,11 +680,8 @@ class _MusicVisualizerState extends State<_MusicVisualizer>
       bool allBarsAtMinimum = true;
       for (int i = 0; i < _barHeights.length; i++) {
         _barHeights[i] = math.max(5.0, _barHeights[i] - 3.0);
-        if (_barHeights[i] > 5.0) {
-          allBarsAtMinimum = false;
-        }
+        if (_barHeights[i] > 5.0) allBarsAtMinimum = false;
       }
-
       if (allBarsAtMinimum && _heightsController.isAnimating) {
         _heightsController.stop();
       }
@@ -760,28 +692,28 @@ class _MusicVisualizerState extends State<_MusicVisualizer>
   void dispose() {
     _heightsController.removeListener(_updateHeights);
     _heightsController.dispose();
-    _colorController.dispose();
     super.dispose();
   }
 
   @override
-  /// Renderiza el visualizador con barras animadas y color dinámico
   Widget build(BuildContext context) {
+    context.watch<ThemeService>(); // Escuchar cambios globales de color
+    final color = AppColors.primaryBlueMid;
+
     return ValueListenableBuilder<bool>(
       valueListenable: widget.isPlayingNotifier,
       builder: (context, isPlaying, _) {
         if (isPlaying && !_heightsController.isAnimating) {
           _heightsController.repeat();
         }
-
         return AnimatedBuilder(
-          animation: Listenable.merge([_heightsController, _colorController]),
+          animation: _heightsController,
           builder: (context, child) {
             return CustomPaint(
               size: const Size(double.infinity, 100),
               painter: _VisualizerPainter(
                 heights: _barHeights,
-                color: _colorAnimation.value ?? Colors.cyanAccent,
+                color: color,
               ),
             );
           },
@@ -800,7 +732,6 @@ class _VisualizerPainter extends CustomPainter {
     : _paint = Paint();
 
   @override
-  /// Dibuja todas las barras del visualizador con degradado
   void paint(Canvas canvas, Size size) {
     const double barWidth = 8.0;
     const double barSpacing = 4.0;
@@ -833,6 +764,5 @@ class _VisualizerPainter extends CustomPainter {
   }
 
   @override
-  /// Siempre repinta con los nuevos datos
   bool shouldRepaint(covariant _VisualizerPainter oldDelegate) => true;
 }

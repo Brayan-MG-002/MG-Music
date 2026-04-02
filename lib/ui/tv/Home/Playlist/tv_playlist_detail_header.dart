@@ -1,4 +1,5 @@
-// Encabezado del detalle de una playlist en TV
+// Copyright © 2026 Brayan Medrano - MG Music
+// Encabezado detallado para la vista de una lista de reproducción en TV, con acciones de gestión y navegación.
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
@@ -28,7 +29,6 @@ class TvPlaylistDetailHeader extends StatelessWidget {
   });
 
   @override
-  /// Construye el encabezado con navegación y acciones de playlist
   Widget build(BuildContext context) {
     final mode = context.watch<ThemeService>().mode;
     return Container(

@@ -26,7 +26,7 @@ class WhatsNewPage extends StatelessWidget {
           const SizedBox(height: 15),
           Center(
             child: Text(
-              'MG Music v1.2.1 Hotfix',
+              'MG Music v1.2.2 Hotfix',
               style: TextStyle(
                 color: AppColors.textPrimary(mode),
                 fontSize: 26,
@@ -67,7 +67,7 @@ class WhatsNewPage extends StatelessWidget {
 
           _buildFeatureSection(
             mode: mode,
-            title: 'Correcciones (Hotfix 1.2.1)',
+            title: 'Correcciones (Hotfix 1.2.2)',
             icon: Ionicons.construct_outline,
             items: [
               'Corrección crítica: Se solucionó el error que congelaba la interfaz y la pantalla de inicio al tener los modos de color "Latido" o "Múltiple" activos.',

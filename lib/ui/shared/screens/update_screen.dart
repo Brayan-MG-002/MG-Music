@@ -23,19 +23,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mg_music/ui/shared/splash.dart';
 import 'package:mg_music/ui/tv/tv_focusable_item.dart';
 
-
 enum _UpdatePageState { loading, error, info, downloading, done, upToDate }
-
 
 class UpdateScreen extends StatefulWidget {
   final VersionModel? versionData;
   final bool isTv;
 
-  const UpdateScreen({
-    super.key,
-    this.versionData,
-    this.isTv = false,
-  });
+  const UpdateScreen({super.key, this.versionData, this.isTv = false});
 
   @override
   State<UpdateScreen> createState() => _UpdateScreenState();
@@ -73,7 +67,6 @@ class _UpdateScreenState extends State<UpdateScreen>
     super.dispose();
   }
 
-
   Future<void> _fetchVersionData() async {
     if (widget.versionData != null) {
       final localCode = await UpdateService.getLocalVersionCode();
@@ -81,7 +74,9 @@ class _UpdateScreenState extends State<UpdateScreen>
       if (mounted) {
         setState(() {
           _dynamicVersionData = widget.versionData;
-          _pageState = cmp >= 0 ? _UpdatePageState.upToDate : _UpdatePageState.info;
+          _pageState = cmp >= 0
+              ? _UpdatePageState.upToDate
+              : _UpdatePageState.info;
         });
       }
       return;
@@ -105,7 +100,9 @@ class _UpdateScreenState extends State<UpdateScreen>
           final cmp = localCode >= data.versionCode ? 0 : -1;
           setState(() {
             _dynamicVersionData = data;
-            _pageState = cmp >= 0 ? _UpdatePageState.upToDate : _UpdatePageState.info;
+            _pageState = cmp >= 0
+                ? _UpdatePageState.upToDate
+                : _UpdatePageState.info;
           });
         } else {
           setState(() {
@@ -163,11 +160,13 @@ class _UpdateScreenState extends State<UpdateScreen>
     final data = _dynamicVersionData;
     if (data == null) return;
 
-    final alreadyDownloaded = await UpdateDownloadService.isDownloaded(data.version, data.title);
+    final alreadyDownloaded = await UpdateDownloadService.isDownloaded(
+      data.version,
+    );
     if (alreadyDownloaded) {
       if (mounted) {
         setState(() {
-          _downloadedFilePath = UpdateDownloadService.apkPath(data.version, data.title);
+          _downloadedFilePath = UpdateDownloadService.apkPath(data.version);
           _downloadProgress = 1.0;
           _pageState = _UpdatePageState.done;
         });
@@ -198,7 +197,6 @@ class _UpdateScreenState extends State<UpdateScreen>
     final result = await UpdateDownloadService.downloadApk(
       url: downloadUrl,
       version: version,
-      title: data.title,
       onProgress: (progress, totalMB, _) {
         if (mounted && _pageState == _UpdatePageState.downloading) {
           setState(() {
@@ -217,10 +215,9 @@ class _UpdateScreenState extends State<UpdateScreen>
         _downloadProgress = 1.0;
         _pageState = _UpdatePageState.done;
       });
-      final finalApkName = _downloadedFilePath?.split('/').last ?? 'MG-Music-v$version.apk';
       CustomToastService.show(
         context,
-        message: 'Descarga completada — $finalApkName',
+        message: 'Descarga completada — MG-Music-v$version.apk',
         type: ToastType.success,
         icon: Ionicons.checkmark_done_outline,
       );
@@ -293,7 +290,6 @@ class _UpdateScreenState extends State<UpdateScreen>
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     ResponsiveService.init(context);
@@ -322,18 +318,13 @@ class _UpdateScreenState extends State<UpdateScreen>
           ),
           SafeArea(
             child: Column(
-              children: [
-                Expanded(
-                  child: _buildAnimatedContent(mode, data),
-                ),
-              ],
+              children: [Expanded(child: _buildAnimatedContent(mode, data))],
             ),
           ),
         ],
       ),
     );
   }
-
 
   Widget _buildAnimatedContent(AppThemeMode mode, VersionModel? data) {
     return Center(
@@ -361,15 +352,16 @@ class _UpdateScreenState extends State<UpdateScreen>
             Expanded(
               child: PageTransitionSwitcher(
                 duration: const Duration(milliseconds: 500),
-                transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
-                  return SharedAxisTransition(
-                    animation: primaryAnimation,
-                    secondaryAnimation: secondaryAnimation,
-                    transitionType: SharedAxisTransitionType.horizontal,
-                    fillColor: Colors.transparent,
-                    child: child,
-                  );
-                },
+                transitionBuilder:
+                    (child, primaryAnimation, secondaryAnimation) {
+                      return SharedAxisTransition(
+                        animation: primaryAnimation,
+                        secondaryAnimation: secondaryAnimation,
+                        transitionType: SharedAxisTransitionType.horizontal,
+                        fillColor: Colors.transparent,
+                        child: child,
+                      );
+                    },
                 child: _buildStateContent(mode, data),
               ),
             ),
@@ -388,14 +380,17 @@ class _UpdateScreenState extends State<UpdateScreen>
       case _UpdatePageState.upToDate:
         return _buildUpToDateState(mode, data, key: const ValueKey('upToDate'));
       case _UpdatePageState.downloading:
-        return _buildDownloadingState(mode, data, key: const ValueKey('downloading'));
+        return _buildDownloadingState(
+          mode,
+          data,
+          key: const ValueKey('downloading'),
+        );
       case _UpdatePageState.done:
         return _buildDoneState(mode, data, key: const ValueKey('done'));
       case _UpdatePageState.info:
         return _buildInfoState(mode, data, key: const ValueKey('info'));
     }
   }
-
 
   Widget _buildLogoSection(AppThemeMode mode) {
     return AnimatedBuilder(
@@ -409,8 +404,9 @@ class _UpdateScreenState extends State<UpdateScreen>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primaryBlueMid
-                        .withOpacity(0.25 * _glowController.value),
+                    color: AppColors.primaryBlueMid.withOpacity(
+                      0.25 * _glowController.value,
+                    ),
                     blurRadius: 28.r,
                     spreadRadius: 4.r,
                   ),
@@ -446,8 +442,8 @@ class _UpdateScreenState extends State<UpdateScreen>
                 _pageState == _UpdatePageState.upToDate
                     ? 'AL DÍA'
                     : _dynamicVersionData != null
-                        ? 'v${_dynamicVersionData!.version}'
-                        : 'ACTUALIZACIÓN',
+                    ? 'v${_dynamicVersionData!.version}'
+                    : 'ACTUALIZACIÓN',
                 style: TextStyle(
                   color: AppColors.primaryBlueMid,
                   fontSize: 9.sp,
@@ -461,7 +457,6 @@ class _UpdateScreenState extends State<UpdateScreen>
       },
     );
   }
-
 
   Widget _buildLoadingState(AppThemeMode mode, {Key? key}) {
     return Center(
@@ -493,8 +488,11 @@ class _UpdateScreenState extends State<UpdateScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Ionicons.cloud_offline_outline,
-              color: Colors.redAccent, size: 56.sp),
+          Icon(
+            Ionicons.cloud_offline_outline,
+            color: Colors.redAccent,
+            size: 56.sp,
+          ),
           SizedBox(height: 16.h),
           Text(
             'No se pudo verificar',
@@ -538,7 +536,11 @@ class _UpdateScreenState extends State<UpdateScreen>
     );
   }
 
-  Widget _buildUpToDateState(AppThemeMode mode, VersionModel? data, {Key? key}) {
+  Widget _buildUpToDateState(
+    AppThemeMode mode,
+    VersionModel? data, {
+    Key? key,
+  }) {
     return Padding(
       key: key,
       padding: EdgeInsets.symmetric(horizontal: 8.w),
@@ -611,7 +613,7 @@ class _UpdateScreenState extends State<UpdateScreen>
     }
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape ||
-            widget.isTv;
+        widget.isTv;
 
     return AnimationLimiter(
       key: key,
@@ -655,8 +657,9 @@ class _UpdateScreenState extends State<UpdateScreen>
         child: Container(
           padding: EdgeInsets.all(18.r),
           decoration: BoxDecoration(
-            color: AppColors.surface(mode)
-                .withOpacity(mode == AppThemeMode.dark ? 0.18 : 0.38),
+            color: AppColors.surface(
+              mode,
+            ).withOpacity(mode == AppThemeMode.dark ? 0.18 : 0.38),
             borderRadius: BorderRadius.circular(18.r),
             border: Border.all(
               color: AppColors.themeBorder(mode).withOpacity(0.3),
@@ -678,10 +681,14 @@ class _UpdateScreenState extends State<UpdateScreen>
                   ),
                   SizedBox(width: 8.w),
                   Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8.w,
+                      vertical: 2.h,
+                    ),
                     decoration: BoxDecoration(
-                      color: _importanceColor(data.importance).withOpacity(0.15),
+                      color: _importanceColor(
+                        data.importance,
+                      ).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8.r),
                     ),
                     child: Text(
@@ -772,11 +779,16 @@ class _UpdateScreenState extends State<UpdateScreen>
                       final now = DateTime.now().millisecondsSinceEpoch;
                       final twoDays = 2 * 24 * 60 * 60 * 1000;
                       await prefs.setInt('update_snoozed_until', now + twoDays);
-                      await prefs.setInt('snoozed_version_code', data.versionCode);
+                      await prefs.setInt(
+                        'snoozed_version_code',
+                        data.versionCode,
+                      );
 
                       if (mounted) {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const SplashScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => const SplashScreen(),
+                          ),
                         );
                       }
                     },
@@ -790,7 +802,11 @@ class _UpdateScreenState extends State<UpdateScreen>
     );
   }
 
-  Widget _buildDownloadingState(AppThemeMode mode, VersionModel? data, {Key? key}) {
+  Widget _buildDownloadingState(
+    AppThemeMode mode,
+    VersionModel? data, {
+    Key? key,
+  }) {
     final version = data?.version ?? '';
     final percent = (_downloadProgress * 100).toInt();
     final totalText = _totalMB > 0
@@ -938,7 +954,6 @@ class _UpdateScreenState extends State<UpdateScreen>
     );
   }
 
-
   Color _importanceColor(String importance) {
     switch (importance) {
       case 'critical':
@@ -966,7 +981,6 @@ class _UpdateScreenState extends State<UpdateScreen>
   }
 }
 
-
 class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -992,8 +1006,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor =
-        isDestructive ? Colors.grey : AppColors.primaryBlueMid;
+    final accentColor = isDestructive ? Colors.grey : AppColors.primaryBlueMid;
 
     Widget interiorContent = Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -1033,9 +1046,7 @@ class _ActionButton extends StatelessWidget {
                   end: Alignment.bottomRight,
                 )
               : null,
-          color: !isPrimary
-              ? AppColors.surface(mode).withOpacity(0.08)
-              : null,
+          color: !isPrimary ? AppColors.surface(mode).withOpacity(0.08) : null,
           border: Border.all(
             color: isPrimary
                 ? AppColors.fabAccent(mode).withOpacity(0.5)

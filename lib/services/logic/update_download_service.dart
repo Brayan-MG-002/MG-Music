@@ -24,39 +24,32 @@ class UpdateDownloadService {
     } catch (_) {}
   }
 
-  static String apkPath(String version, [String? title]) {
-    String name = 'MG-Music-v$version';
-    if (title != null && title.isNotEmpty) {
-      final safeTitle = title.replaceAll(' ', '-').replaceAll(RegExp(r'[^a-zA-Z0-9\-]'), '');
-      name += '-$safeTitle';
-    }
-    return '/storage/emulated/0/Download/MG Music/$name.apk';
-  }
+  static String apkPath(String version) =>
+      '/storage/emulated/0/Download/MG Music/MG-Music-v$version.apk';
 
-  static Future<bool> isDownloaded(String version, [String? title]) async {
-    final file = File(apkPath(version, title));
+  static Future<bool> isDownloaded(String version) async {
+    final file = File(apkPath(version));
     return await file.exists();
   }
 
-  static Future<void> deleteApk(String version, [String? title]) async {
-    final file = File(apkPath(version, title));
+  static Future<void> deleteApk(String version) async {
+    final file = File(apkPath(version));
     try {
       if (await file.exists()) {
         await file.delete();
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   static Future<UpdateDownloadResult> downloadApk({
     required String url,
     required String version,
-    String? title,
-    required Function(double progress, double totalMB, double downloadedMB) onProgress,
+    required Function(double progress, double totalMB, double downloadedMB)
+    onProgress,
   }) async {
     cancelDownload();
     _activeClient = http.Client();
-    _activeFilePath = apkPath(version, title);
+    _activeFilePath = apkPath(version);
 
     try {
       final String downloadDir = '/storage/emulated/0/Download/MG Music';

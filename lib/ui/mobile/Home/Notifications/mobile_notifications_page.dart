@@ -205,8 +205,6 @@ class MobileNotificationsPage extends StatelessWidget {
   }
 }
 
-
-
 class _NotificationCard extends StatefulWidget {
   final NotificationItem item;
   final NotificationService service;
@@ -231,7 +229,6 @@ class _NotificationCardState extends State<_NotificationCard>
   NotificationItem get item => widget.item;
   AppThemeMode get mode => widget.mode;
 
-
   Color get _accentColor {
     if (mode == AppThemeMode.dark) {
       return item.type == NotificationType.beta
@@ -244,9 +241,7 @@ class _NotificationCardState extends State<_NotificationCard>
     }
   }
 
-
   Color get _borderColor => AppColors.themeBorder(mode);
-
 
   List<Color> get _headerGradient => item.isRead
       ? [AppColors.surface(mode), AppColors.surface(mode)]
@@ -282,7 +277,6 @@ class _NotificationCardState extends State<_NotificationCard>
     Map<String, dynamic>? data,
     AppThemeMode mode,
   ) {
-
     final regExp = RegExp(r'\[\[ACTION:([^|\]]+)\|([^\]]+)\]\]');
     final matches = regExp.allMatches(message).toList();
 
@@ -290,8 +284,9 @@ class _NotificationCardState extends State<_NotificationCard>
       return Text(
         message,
         style: TextStyle(
-          color: AppColors.textSecondary(mode)
-              .withOpacity(item.isRead ? 0.8 : 1.0),
+          color: AppColors.textSecondary(
+            mode,
+          ).withOpacity(item.isRead ? 0.8 : 1.0),
           fontSize: 13.sp,
           height: 1.5,
         ),
@@ -302,7 +297,6 @@ class _NotificationCardState extends State<_NotificationCard>
     int lastMatchEnd = 0;
 
     for (final match in matches) {
-
       if (match.start > lastMatchEnd) {
         final text = message.substring(lastMatchEnd, match.start).trim();
         if (text.isNotEmpty) {
@@ -310,8 +304,9 @@ class _NotificationCardState extends State<_NotificationCard>
             Text(
               text,
               style: TextStyle(
-                color: AppColors.textSecondary(mode)
-                    .withOpacity(item.isRead ? 0.8 : 1.0),
+                color: AppColors.textSecondary(
+                  mode,
+                ).withOpacity(item.isRead ? 0.8 : 1.0),
                 fontSize: 13.sp,
                 height: 1.5,
               ),
@@ -342,7 +337,6 @@ class _NotificationCardState extends State<_NotificationCard>
       lastMatchEnd = match.end;
     }
 
-
     if (lastMatchEnd < message.length) {
       final remaining = message.substring(lastMatchEnd).trim();
       if (remaining.isNotEmpty) {
@@ -350,8 +344,9 @@ class _NotificationCardState extends State<_NotificationCard>
           Text(
             remaining,
             style: TextStyle(
-              color: AppColors.textSecondary(mode)
-                  .withOpacity(item.isRead ? 0.8 : 1.0),
+              color: AppColors.textSecondary(
+                mode,
+              ).withOpacity(item.isRead ? 0.8 : 1.0),
               fontSize: 13.sp,
               height: 1.5,
             ),
@@ -366,14 +361,12 @@ class _NotificationCardState extends State<_NotificationCard>
     );
   }
 
-
   String get _shortText {
     if (item.type == NotificationType.notice) {
       return item.data?['short'] as String? ?? item.message;
     }
     return item.message;
   }
-
 
   String? _localVersion;
   bool _isNewer = false;
@@ -395,10 +388,26 @@ class _NotificationCardState extends State<_NotificationCard>
   }
 
   Future<void> _checkVersion() async {
+    final notiVersionCode = item.data?['version_code'];
     final notiVersion = item.data?['version'] as String?;
-    if (notiVersion == null) return;
 
     _localVersion = await UpdateService.getLocalVersion();
+
+    if (notiVersionCode != null) {
+      final localCode = await UpdateService.getLocalVersionCode();
+      final remoteCode = notiVersionCode is String
+          ? int.tryParse(notiVersionCode)
+          : notiVersionCode as int?;
+      if (mounted) {
+        setState(() {
+          _isNewer = localCode < (remoteCode ?? 0);
+        });
+      }
+      return;
+    }
+
+    if (notiVersion == null) return;
+
     if (_localVersion != null) {
       final cmp = UpdateService.compareVersions(_localVersion!, notiVersion);
       if (mounted) {
@@ -507,10 +516,8 @@ class _NotificationCardState extends State<_NotificationCard>
                       ),
                     ),
                   ),
-                  errorWidget: (_, __, ___) => Image.asset(
-                    'assets/MG-I-T.png',
-                    fit: BoxFit.cover,
-                  ),
+                  errorWidget: (_, __, ___) =>
+                      Image.asset('assets/MG-I-T.png', fit: BoxFit.cover),
                 ),
               ),
               decoration: BoxDecoration(
@@ -550,8 +557,9 @@ class _NotificationCardState extends State<_NotificationCard>
                 Text(
                   item.title,
                   style: TextStyle(
-                    color: AppColors.textPrimary(mode)
-                        .withOpacity(item.isRead ? 0.8 : 1.0),
+                    color: AppColors.textPrimary(
+                      mode,
+                    ).withOpacity(item.isRead ? 0.8 : 1.0),
                     fontWeight: item.isRead ? FontWeight.w600 : FontWeight.bold,
                     fontSize: 14.sp,
                   ),
@@ -563,8 +571,9 @@ class _NotificationCardState extends State<_NotificationCard>
                   Text(
                     _shortText,
                     style: TextStyle(
-                      color: AppColors.textSecondary(mode)
-                          .withOpacity(item.isRead ? 0.5 : 0.7),
+                      color: AppColors.textSecondary(
+                        mode,
+                      ).withOpacity(item.isRead ? 0.5 : 0.7),
                       fontSize: 12.sp,
                     ),
                     maxLines: 1,
@@ -618,10 +627,7 @@ class _NotificationCardState extends State<_NotificationCard>
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            _accentColor.withOpacity(0.04),
-            Colors.transparent,
-          ],
+          colors: [_accentColor.withOpacity(0.04), Colors.transparent],
         ),
       ),
       child: Column(
@@ -629,7 +635,6 @@ class _NotificationCardState extends State<_NotificationCard>
         children: [
           Divider(color: _borderColor.withOpacity(0.2), height: 1),
           SizedBox(height: 12.h),
-
 
           if (imageUrl != null) ...[
             ClipRRect(
@@ -660,19 +665,23 @@ class _NotificationCardState extends State<_NotificationCard>
             SizedBox(height: 12.h),
           ],
 
-
           if (_isNewer) ...[
             Container(
               padding: EdgeInsets.all(12.r),
               decoration: BoxDecoration(
                 color: AppColors.primaryBlueMid.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: AppColors.primaryBlueMid.withOpacity(0.3)),
+                border: Border.all(
+                  color: AppColors.primaryBlueMid.withOpacity(0.3),
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(Ionicons.sparkles_outline,
-                      color: AppColors.primaryBlueMid, size: 20.r),
+                  Icon(
+                    Ionicons.sparkles_outline,
+                    color: AppColors.primaryBlueMid,
+                    size: 20.r,
+                  ),
                   SizedBox(width: 10.w),
                   Expanded(
                     child: Text(
@@ -691,15 +700,16 @@ class _NotificationCardState extends State<_NotificationCard>
             SizedBox(height: 12.h),
           ],
 
-
           if (notiVersion != null)
             Padding(
               padding: EdgeInsets.only(bottom: 8.h),
               child: Row(
                 children: [
-                  Icon(isBetaNoti ? Ionicons.flask : Ionicons.rocket,
-                      color: AppColors.textSecondary(mode).withOpacity(0.5),
-                      size: 14.r),
+                  Icon(
+                    isBetaNoti ? Ionicons.flask : Ionicons.rocket,
+                    color: AppColors.textSecondary(mode).withOpacity(0.5),
+                    size: 14.r,
+                  ),
                   SizedBox(width: 6.w),
                   Text(
                     'Versión $notiVersion ${isBetaNoti ? '(Beta)' : '(Relase)'}',
@@ -710,10 +720,12 @@ class _NotificationCardState extends State<_NotificationCard>
                     ),
                   ),
                   if (_localVersion != null && main_app.isBeta) ...[
-                    Text('  ·  ',
-                        style: TextStyle(
-                            color: AppColors.textSecondary(mode)
-                                .withOpacity(0.3))),
+                    Text(
+                      '  ·  ',
+                      style: TextStyle(
+                        color: AppColors.textSecondary(mode).withOpacity(0.3),
+                      ),
+                    ),
                     Text(
                       'Tu versión: $_localVersion (Beta)',
                       style: TextStyle(
@@ -729,7 +741,6 @@ class _NotificationCardState extends State<_NotificationCard>
           _buildRichMessage(item.message, item.data, mode),
           SizedBox(height: 16.h),
 
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -737,12 +748,12 @@ class _NotificationCardState extends State<_NotificationCard>
               Text(
                 DateFormat('dd/MM/yyyy · HH:mm').format(item.timestamp),
                 style: TextStyle(
-                  color: AppColors.textSecondary(mode)
-                      .withOpacity(item.isRead ? 0.3 : 0.4),
+                  color: AppColors.textSecondary(
+                    mode,
+                  ).withOpacity(item.isRead ? 0.3 : 0.4),
                   fontSize: 11.sp,
                 ),
               ),
-
 
               Expanded(
                 child: Column(
@@ -755,8 +766,9 @@ class _NotificationCardState extends State<_NotificationCard>
                           label: 'Abrir Actualización',
                           icon: Ionicons.download_outline,
                           color: AppColors.primaryBlueMid,
-                          onTap: () => widget.service
-                              .triggerAction({'action_type': 'open_updates'}),
+                          onTap: () => widget.service.triggerAction({
+                            'action_type': 'open_updates',
+                          }),
                         ),
                       ),
                     if (actionsObj != null)
@@ -764,18 +776,22 @@ class _NotificationCardState extends State<_NotificationCard>
                         spacing: 8.w,
                         runSpacing: 8.h,
                         alignment: WrapAlignment.end,
-                        children: actionsObj.where((act) {
-                          final label = act['label'] as String? ?? '';
-                          return !item.message.contains(label);
-                        }).map((act) {
-                          final label = act['label'] as String? ?? 'Abrir';
-                          return _ActionChip(
-                            label: label,
-                            color: _accentColor,
-                            onTap: () => widget.service.triggerAction(
-                                act as Map<String, dynamic>),
-                          );
-                        }).toList(),
+                        children: actionsObj
+                            .where((act) {
+                              final label = act['label'] as String? ?? '';
+                              return !item.message.contains(label);
+                            })
+                            .map((act) {
+                              final label = act['label'] as String? ?? 'Abrir';
+                              return _ActionChip(
+                                label: label,
+                                color: _accentColor,
+                                onTap: () => widget.service.triggerAction(
+                                  act as Map<String, dynamic>,
+                                ),
+                              );
+                            })
+                            .toList(),
                       ),
                   ],
                 ),
@@ -787,9 +803,6 @@ class _NotificationCardState extends State<_NotificationCard>
     );
   }
 }
-
-
-
 
 class _ActionChip extends StatelessWidget {
   final String label;

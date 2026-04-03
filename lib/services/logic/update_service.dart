@@ -51,7 +51,16 @@ class UpdateService {
       final packageInfo = await PackageInfo.fromPlatform();
       return packageInfo.version;
     } catch (e) {
-      return '1.1.0';
+      return '1.2.0';
+    }
+  }
+
+  static Future<int> getLocalVersionCode() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      return int.tryParse(packageInfo.buildNumber) ?? 0;
+    } catch (e) {
+      return 0;
     }
   }
 

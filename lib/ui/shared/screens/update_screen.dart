@@ -48,7 +48,6 @@ class _UpdateScreenState extends State<UpdateScreen>
   static const _channel = MethodChannel('mg_music/notification');
 
   VersionModel? _dynamicVersionData;
-  String _localVersion = '';
   _UpdatePageState _pageState = _UpdatePageState.loading;
   String? _errorMessage;
 
@@ -77,11 +76,8 @@ class _UpdateScreenState extends State<UpdateScreen>
 
   Future<void> _fetchVersionData() async {
     if (widget.versionData != null) {
-      _localVersion = await UpdateService.getLocalVersion();
-      final cmp = UpdateService.compareVersions(
-        _localVersion,
-        widget.versionData!.version,
-      );
+      final localCode = await UpdateService.getLocalVersionCode();
+      final cmp = localCode >= widget.versionData!.versionCode ? 0 : -1;
       if (mounted) {
         setState(() {
           _dynamicVersionData = widget.versionData;
@@ -93,7 +89,6 @@ class _UpdateScreenState extends State<UpdateScreen>
 
     try {
       final result = await UpdateService.checkForUpdate(isTv: widget.isTv);
-      _localVersion = await UpdateService.getLocalVersion();
 
       if (mounted) {
         final data = result['data'] as VersionModel?;
@@ -106,7 +101,8 @@ class _UpdateScreenState extends State<UpdateScreen>
         }
 
         if (data != null) {
-          final cmp = UpdateService.compareVersions(_localVersion, data.version);
+          final localCode = await UpdateService.getLocalVersionCode();
+          final cmp = localCode >= data.versionCode ? 0 : -1;
           setState(() {
             _dynamicVersionData = data;
             _pageState = cmp >= 0 ? _UpdatePageState.upToDate : _UpdatePageState.info;

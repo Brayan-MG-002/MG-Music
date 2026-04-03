@@ -325,7 +325,7 @@ class MobileHomePageState extends State<MobileHomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final mode = context.watch<ThemeService>().mode;
+    final mode = context.select<ThemeService, AppThemeMode>((ts) => ts.mode);
 
     return WillPopScope(
       onWillPop: () async {

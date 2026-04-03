@@ -5,7 +5,7 @@ description: "MG Music, un reproductor musical fan-made inspirado en Ado."
 # Evita que el paquete se publique accidentalmente en pub.dev.
 publish_to: 'none'
 # Versión de la aplicación.
-version: 1.2.0+6
+version: 1.2.1+7
 
 # Entorno de desarrollo y versión de SDK de Dart.
 environment:

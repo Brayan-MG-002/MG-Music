@@ -237,7 +237,7 @@ class MobilePlaylistsPageState extends State<MobilePlaylistsPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final mode = context.watch<ThemeService>().mode;
+    final mode = context.select<ThemeService, AppThemeMode>((ts) => ts.mode);
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),

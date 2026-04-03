@@ -163,11 +163,11 @@ class _UpdateScreenState extends State<UpdateScreen>
     final data = _dynamicVersionData;
     if (data == null) return;
 
-    final alreadyDownloaded = await UpdateDownloadService.isDownloaded(data.version);
+    final alreadyDownloaded = await UpdateDownloadService.isDownloaded(data.version, data.title);
     if (alreadyDownloaded) {
       if (mounted) {
         setState(() {
-          _downloadedFilePath = UpdateDownloadService.apkPath(data.version);
+          _downloadedFilePath = UpdateDownloadService.apkPath(data.version, data.title);
           _downloadProgress = 1.0;
           _pageState = _UpdatePageState.done;
         });
@@ -198,6 +198,7 @@ class _UpdateScreenState extends State<UpdateScreen>
     final result = await UpdateDownloadService.downloadApk(
       url: downloadUrl,
       version: version,
+      title: data.title,
       onProgress: (progress, totalMB, _) {
         if (mounted && _pageState == _UpdatePageState.downloading) {
           setState(() {
@@ -216,9 +217,10 @@ class _UpdateScreenState extends State<UpdateScreen>
         _downloadProgress = 1.0;
         _pageState = _UpdatePageState.done;
       });
+      final finalApkName = _downloadedFilePath?.split('/').last ?? 'MG-Music-v$version.apk';
       CustomToastService.show(
         context,
-        message: 'Descarga completada — MG-Music-v$version.apk',
+        message: 'Descarga completada — $finalApkName',
         type: ToastType.success,
         icon: Ionicons.checkmark_done_outline,
       );

@@ -26,7 +26,7 @@ class WhatsNewPage extends StatelessWidget {
           const SizedBox(height: 15),
           Center(
             child: Text(
-              'MG Music v1.2.0',
+              'MG Music v1.2.1 Hotfix',
               style: TextStyle(
                 color: AppColors.textPrimary(mode),
                 fontSize: 26,
@@ -36,7 +36,7 @@ class WhatsNewPage extends StatelessWidget {
           ),
           Center(
             child: Text(
-              'Nueva Etapa',
+              'Hotfix',
               style: TextStyle(
                 color: AppColors.primaryBlueMid,
                 fontSize: 18,
@@ -46,23 +46,7 @@ class WhatsNewPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                '“Lo mejor empieza a partir de aquí”',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textPrimary(mode),
-                  fontSize: 16,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 25),
-          
+
           // Sección: El Por Qué de esta Versión
           _buildFeatureSection(
             mode: mode,
@@ -80,6 +64,17 @@ class WhatsNewPage extends StatelessWidget {
             child: _buildSectionDivider(mode, 'NOVEDADES DE LA VERSIÓN'),
           ),
           const SizedBox(height: 15),
+
+          _buildFeatureSection(
+            mode: mode,
+            title: 'Correcciones (Hotfix 1.2.1)',
+            icon: Ionicons.construct_outline,
+            items: [
+              'Corrección crítica: Se solucionó el error que congelaba la interfaz y la pantalla de inicio al tener los modos de color "Latido" o "Múltiple" activos.',
+              'Optimización: El menú de selección de artistas ahora carga progresivamente y genera caché, eliminando el lag en bibliotecas gigantes.',
+              'Nuevo filtro: Se agregó la opción de ordenar tus canciones por fecha de antigüedad ("Por Fecha (Antiguas)").',
+            ],
+          ),
 
           _buildFeatureSection(
             mode: mode,
@@ -125,7 +120,7 @@ class WhatsNewPage extends StatelessWidget {
               'Modo Beta activo: Sistema de reporte de errores optimizado para esta fase.',
             ],
           ),
-          
+
           const SizedBox(height: 25),
           Center(
             child: Padding(
@@ -148,7 +143,6 @@ class WhatsNewPage extends StatelessWidget {
       ),
     );
   }
-
 
   Widget _buildSectionDivider(AppThemeMode mode, String label) {
     return Row(
@@ -180,7 +174,6 @@ class WhatsNewPage extends StatelessWidget {
       ],
     );
   }
-
 
   Widget _buildFeatureSection({
     required String title,

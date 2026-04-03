@@ -279,7 +279,7 @@ class MobileFavoritesPageState extends State<MobileFavoritesPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final mode = context.watch<ThemeService>().mode;
+    final mode = context.select<ThemeService, AppThemeMode>((ts) => ts.mode);
 
     if (_isLoading) {
       return MobileFavoritesShimmer(isGridView: _isGridView);

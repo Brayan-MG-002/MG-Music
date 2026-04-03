@@ -58,6 +58,7 @@ class _MobileMainScreenState extends State<MobileMainScreen>
   List<LocalSong> _songs = [];
   SortType _currentSortType = SortType.patrona;
   String? _selectedArtist;
+  List<String>? _cachedArtistList;
 
   final GlobalKey<MobileHomePageState> _homeKey = GlobalKey();
   final GlobalKey<MobileFavoritesPageState> _favoritesKey = GlobalKey();
@@ -287,6 +288,7 @@ class _MobileMainScreenState extends State<MobileMainScreen>
 
   void _onGlobalSongsChanged() {
     if (!mounted) return;
+    _cachedArtistList = null;
     final newSongs = List<LocalSong>.from(SongFetcher.songsNotifier.value);
     setState(() {
       _allSongs = newSongs;
@@ -379,7 +381,8 @@ class _MobileMainScreenState extends State<MobileMainScreen>
           case SortType.patrona: return 'Experiencia temática';
           case SortType.alphabetical: return 'Alfabético (A-Z)';
           case SortType.inverse: return 'Inverso (Z-A)';
-          case SortType.byDate: return 'Por Fecha (Reciente)';
+          case SortType.byDate: return 'Por Fecha (Recientes)';
+          case SortType.byDateAsc: return 'Por Fecha (Antiguas)';
         }
       },
       selectedItem: _currentSortType,
@@ -396,16 +399,23 @@ class _MobileMainScreenState extends State<MobileMainScreen>
   }
 
   void _handleArtistFilterTap() async {
-    final Set<String> uniqueArtists = _allSongs.map((s) => s.artist).toSet();
-    final List<String> artistList = uniqueArtists.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-    artistList.insert(0, "Todos");
+    if (_cachedArtistList == null) {
+      GlobalModalService.showLoading(message: "Cargando artistas...");
+      await Future.delayed(const Duration(milliseconds: 100)); // allow dialog to show
+      final Set<String> uniqueArtists = {};
+      for (final s in _allSongs) {
+        uniqueArtists.add(s.artist);
+      }
+      _cachedArtistList = uniqueArtists.toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      _cachedArtistList!.insert(0, "Todos");
+      if (mounted) Navigator.pop(context); // close loading
+    }
 
     final selected = await GlobalModalService.showSelectionList<String>(
       title: "Filtrar por Artista",
       icon: Ionicons.people,
-      items: artistList,
+      items: _cachedArtistList!,
       labelBuilder: (item) => item,
       selectedItem: _selectedArtist ?? "Todos",
     );
@@ -460,6 +470,17 @@ class _MobileMainScreenState extends State<MobileMainScreen>
           }
         });
         break;
+      case SortType.byDateAsc:
+        tempSongs.sort((a, b) {
+          try {
+            final aDate = File(a.path).statSync().modified;
+            final bDate = File(b.path).statSync().modified;
+            return aDate.compareTo(bDate);
+          } catch (_) {
+            return 0;
+          }
+        });
+        break;
     }
 
     setState(() {
@@ -506,8 +527,9 @@ class _MobileMainScreenState extends State<MobileMainScreen>
             await _homeKey.currentState?.triggerExitAnimation();
             return true;
           },
-          child: Consumer<ThemeService>(
-            builder: (context, themeService, _) {
+          child: Selector<ThemeService, AppThemeMode>(
+            selector: (context, ts) => ts.mode,
+            builder: (context, mode, _) {
               return Scaffold(
                 backgroundColor: Colors.transparent,
                 resizeToAvoidBottomInset: false,
@@ -608,6 +630,7 @@ class _MobileMainScreenState extends State<MobileMainScreen>
         },
         onSongDeleted: (song) {
           setState(() {
+            _cachedArtistList = null;
             _allSongs.removeWhere((s) => s.id == song.id);
             _applyFiltersAndSort();
           });

@@ -1,1 +1,1 @@
-enum SortType { patrona, alphabetical, inverse, byDate }
+enum SortType { patrona, alphabetical, inverse, byDate, byDateAsc }

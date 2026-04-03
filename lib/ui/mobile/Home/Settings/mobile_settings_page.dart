@@ -132,10 +132,11 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
         ),
 
       _buildSectionTitle('General', mode),
-      Consumer<ThemeService>(
-        builder: (context, themeService, _) {
+      Builder(
+        builder: (context) {
+          final themeType = context.read<ThemeService>().themeType;
           String desc;
-          switch (themeService.themeType) {
+          switch (themeType) {
             case AppThemeType.system:
               desc = 'Igual que el dispositivo';
               break;

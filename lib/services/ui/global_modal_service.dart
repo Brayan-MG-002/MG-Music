@@ -266,11 +266,13 @@ class GlobalModalService {
       title: title,
       icon: icon,
       actions: [],
-      content: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: items.length,
-        padding: EdgeInsets.zero,
+      content: Container(
+        constraints: BoxConstraints(maxHeight: 350.h),
+        child: ListView.builder(
+          shrinkWrap: true,
+          physics: const BouncingScrollPhysics(),
+          itemCount: items.length,
+          padding: EdgeInsets.zero,
         itemBuilder: (context, index) {
           final item = items[index];
           final isSelected = item == selectedItem;
@@ -330,6 +332,7 @@ class GlobalModalService {
             ),
           );
         },
+      ),
       ),
     );
   }
